@@ -1,0 +1,61 @@
+import os
+from os import pathsep
+from pathlib import Path
+from ament_index_python.packages import get_package_share_directory
+ 
+from launch import LaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    SetEnvironmentVariable,
+    TimerAction,
+    RegisterEventHandler,
+)
+from launch.event_handlers import OnProcessExit
+from launch.substitutions import (
+    Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
+)
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+ 
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+def generate_launch_description():
+    # Specifying package name and URDF path 
+    package_name = "igus_rebel_description"
+    urdf_path = 'urdf/igus_rebel_robot2.urdf.xacro'
+    
+    # Get full path 
+    pkg_share = get_package_share_directory(package_name)
+    urdf_model_path = os.path.join(pkg_share, urdf_path)
+
+    # FIXED INDENTATION HERE
+    # Also wrapped in ParameterValue to ensure ROS 2 handles the Command substitution string properly
+    robot_description_config = ParameterValue(
+        Command(['xacro', ' ', urdf_model_path]),
+        value_type=str
+    )
+
+    robot_state_publisher_node = Node(
+        package = "robot_state_publisher",
+        executable = "robot_state_publisher",
+        parameters=[{"robot_description": robot_description_config}]
+    )
+
+    joint_state_publisher_gui_node = Node(
+        package = 'joint_state_publisher_gui',
+        executable="joint_state_publisher_gui"
+    )
+    
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='screen'
+    )
+
+    return LaunchDescription([
+        robot_state_publisher_node,
+        joint_state_publisher_gui_node,
+        rviz_node
+    ])
