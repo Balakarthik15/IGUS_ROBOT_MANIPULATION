@@ -36,6 +36,32 @@ def generate_launch_description():
         value_type=str
     )
 
+    world_path =os.path.join(pkg_share,'worlds','rebel_world.sdf')
+
+    # Launch Gazebo world
+
+    gazebo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
+        ),
+        launch_arguments={'gz_args': f'-r {world_path}'}.items()
+    )
+
+
+    # Spawn Node to inject robot description into the running world instance
+    # Z-axis is set to 0.80m (0.75m table + 0.05m plate height) so it rests exactly on top
+    spawn_robot = Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=[
+            '-topic', 'robot_description',
+            '-name', 'igus_rebel',
+            '-z', '0.80'
+        ],
+        output='screen'
+    ) 
+
+
     robot_state_publisher_node = Node(
         package = "robot_state_publisher",
         executable = "robot_state_publisher",
@@ -57,5 +83,7 @@ def generate_launch_description():
     return LaunchDescription([
         robot_state_publisher_node,
         joint_state_publisher_gui_node,
-        rviz_node
+        rviz_node,
+        gazebo,
+        spawn_robot
     ])

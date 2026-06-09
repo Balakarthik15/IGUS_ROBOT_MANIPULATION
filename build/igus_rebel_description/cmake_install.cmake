@@ -47,6 +47,7 @@ if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT
     "/home/balakarthik/IGUS_ROBOT_MANIPULATION/src/igus_rebel_description/meshes"
     "/home/balakarthik/IGUS_ROBOT_MANIPULATION/src/igus_rebel_description/urdf"
     "/home/balakarthik/IGUS_ROBOT_MANIPULATION/src/igus_rebel_description/launch"
+    "/home/balakarthik/IGUS_ROBOT_MANIPULATION/src/igus_rebel_description/worlds"
     )
 endif()
 

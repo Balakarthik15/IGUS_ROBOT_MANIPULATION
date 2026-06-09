@@ -55,6 +55,7 @@
 /home/balakarthik/IGUS_ROBOT_MANIPULATION/install/igus_rebel_description/share/igus_rebel_description/urdf/igus_rebel2.control.xacro
 /home/balakarthik/IGUS_ROBOT_MANIPULATION/install/igus_rebel_description/share/igus_rebel_description/urdf/igus_rebel.urdf
 /home/balakarthik/IGUS_ROBOT_MANIPULATION/install/igus_rebel_description/share/igus_rebel_description/launch/visualize.launch.py
+/home/balakarthik/IGUS_ROBOT_MANIPULATION/install/igus_rebel_description/share/igus_rebel_description/worlds/rebel_world.sdf
 /home/balakarthik/IGUS_ROBOT_MANIPULATION/install/igus_rebel_description/share/ament_index/resource_index/package_run_dependencies/igus_rebel_description
 /home/balakarthik/IGUS_ROBOT_MANIPULATION/install/igus_rebel_description/share/ament_index/resource_index/parent_prefix_path/igus_rebel_description
 /home/balakarthik/IGUS_ROBOT_MANIPULATION/install/igus_rebel_description/share/igus_rebel_description/environment/ament_prefix_path.sh
