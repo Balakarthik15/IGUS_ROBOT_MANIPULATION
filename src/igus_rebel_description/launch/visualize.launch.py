@@ -31,7 +31,7 @@ def generate_launch_description():
 
     # FIXED INDENTATION HERE
     # Also wrapped in ParameterValue to ensure ROS 2 handles the Command substitution string properly
-    robot_description_config = ParameterValue(
+    robot_description = ParameterValue(
         Command(['xacro', ' ', urdf_model_path]),
         value_type=str
     )
@@ -65,7 +65,10 @@ def generate_launch_description():
     robot_state_publisher_node = Node(
         package = "robot_state_publisher",
         executable = "robot_state_publisher",
-        parameters=[{"robot_description": robot_description_config}]
+        parameters=[{"robot_description": robot_description},
+
+                    {"use_sim_time": True}
+                    ]
     )
 
     joint_state_publisher_gui_node = Node(
@@ -80,10 +83,55 @@ def generate_launch_description():
         output='screen'
     )
 
+    controller_manager = Node(
+        package="controller_manager",
+        executable="ros2_control_node",
+        parameters=[
+            {"robot_description": robot_description,
+             "use_sim_time": True},
+            os.path.join(
+                get_package_share_directory("rebel_ros2_controllers"),
+                "config",
+                "ros2_controllers.yaml",
+            ),
+        ],
+    )
+
+    joint_state_broadcaster_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        output = "screen",
+        arguments=[
+            "joint_state_broadcaster",
+            "--controller-manager",
+            "/controller_manager",
+        ],
+    )
+
+    arm_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        output = "screen",
+        arguments=["arm_controller", "--controller-manager", "/controller_manager"],
+    )
+
+    gz_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        output="screen",
+        arguments=[
+            "/clock@rosgraph_msgs/msg/Clock[ignition.msgs.Clock"
+        ],
+    )
+
+
     return LaunchDescription([
         robot_state_publisher_node,
         joint_state_publisher_gui_node,
         rviz_node,
         gazebo,
-        spawn_robot
+        spawn_robot,
+        joint_state_broadcaster_spawner,
+        arm_controller_spawner,
+        gz_bridge
     ])

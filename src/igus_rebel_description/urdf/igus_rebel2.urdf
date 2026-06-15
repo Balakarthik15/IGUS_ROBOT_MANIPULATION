@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<robot
-  name="igus_rebel">
+<robot name="igus_rebel" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find igus_rebel_description)/urdf/gripper.xacro"/>
+
   <link
     name="base_link">
     <inertial>
@@ -673,29 +675,6 @@
       friction="0.0" />
   </joint>
 
-  <link name="gripper">
-    <visual>
-      <geometry>
-        <mesh filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/Gripper.stl"  scale="0.001 0.001 0.001" />
-      </geometry>
-      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
-    </visual>
-    <collision>
-      <geometry>
-        <mesh filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/Gripper.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-       <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
-    </collision>
-    <inertial>
-      <mass value="0.1" />
-      <inertia ixx="0.03" iyy="0.03" izz="0.03" ixy="0.0" ixz="0.0" iyz="0.0" />
-    </inertial>
-  </link>
-
-  <joint name="gripper_joint" type="fixed">
-    <parent link="link6"/> 
-    <child link="gripper"/>
-    <origin rpy="1.57 0 0" xyz="0 -0.02 0.054"/>
-  </joint>
+  <xacro:gripper parent_link="link6" prefix=""/>
 
 </robot>

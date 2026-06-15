@@ -1,6 +1,8 @@
 <?xml version="1.0"?>
 <!-- igus_rebel.control.xacro -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- 
     <xacro:macro name="igus_rebel_control" params="arm_id hardware_protocol">
         <xacro:macro name="joint_control" params="joint">
             <joint name="${joint}">
@@ -35,14 +37,15 @@
             <xacro:joint_control joint="joint6" />
         </ros2_control>
         <xacro:if value="${hardware_protocol == 'gazebo'}">
-            <gazebo>
-                <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-                    <robot_param>robot_description</robot_param>
-                    <robot_param_node>robot_state_publisher</robot_param_node>
-                    <parameters>$(find igus_rebel_moveit_config)/config/ros_controllers.yaml</parameters>
-                    <controller_manager_name>controller_manager</controller_manager_name>
-                </plugin>
-            </gazebo>
-        </xacro:if>
-    </xacro:macro>
+
+        -->
+
+        <gazebo>
+                <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin">
+                <robot_param>igus_rebel_description</robot_param>
+                <robot_param_node>robot_state_publisher</robot_param_node>
+                <parameters>$(find rebel_ros2_controllers)/config/ros2_controllers.yaml</parameters>
+                <controller_manager_name>controller_manager</controller_manager_name>
+            </plugin>
+        </gazebo>
 </robot>

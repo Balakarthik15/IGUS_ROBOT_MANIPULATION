@@ -1,12 +1,18 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://wiki.ros.org/xacro"
        name="igus_rebel" >
-  <xacro:arg name="hardware_protocol" default="rebel"/>
-  <!-- igus_rebel -->
-  <xacro:include filename="$(find igus_rebel_description)/urdf/igus_rebel2.urdf" />
 
-  <xacro:include filename="$(find igus_rebel_description)/urdf/igus_rebel2.control.xacro"/>
-  <xacro:igus_rebel_control arm_id="rebel_arm" hardware_protocol="$(arg hardware_protocol)"/>
+  <xacro:include filename="$(find igus_rebel_description)/urdf/igus_rebel2.urdf" />
+  
+  <xacro:include filename="$(find igus_rebel_description)/urdf/gazebo.xacro" />
+
+  <xacro:include filename="$(find rebel_ros2_controllers)/urdf/ros2_control.xacro"/>
+
+  <!--
+
+  <xacro:arg name="hardware_protocol" default="rebel"/>
+ 
+  <xacro:igus_rebel_control arm_id="rebel_arm" hardware_protocol="$(arg hardware_protocol)"/> -->
   
   <link name="world" />
 
