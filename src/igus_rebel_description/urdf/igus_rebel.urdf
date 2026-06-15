@@ -1,6 +1,8 @@
 <?xml version="1.0"?>
 <robot name="igus_rebel">
 
+
+
 <!-- measured from model -->
   <link name="base_link">
     <visual>
