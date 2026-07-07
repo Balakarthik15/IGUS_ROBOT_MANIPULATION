@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<robot name="igus_rebel" xmlns:xacro="http://www.ros.org/wiki/xacro">
-
-  <xacro:include filename="$(find igus_rebel_description)/urdf/gripper.xacro"/>
-
+<robot
+  name="igus_rebel">
   <link
     name="base_link">
     <inertial>
@@ -35,11 +33,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0 0.05"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_base_link.stl" />
+        <cylinder radius="0.09" length="0.1"/>
       </geometry>
     </collision>
   </link>
@@ -75,11 +72,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0 -0.0125"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_motor1.stl" />
+        <cylinder radius="0.05" length="0.065"/>
       </geometry>
     </collision>
   </link>
@@ -128,11 +124,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 -0.045 0.08"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_link1.stl" />
+        <box size="0.1 0.03 0.1"/>
       </geometry>
     </collision>
   </link>
@@ -147,7 +142,7 @@
     <child
       link="link1" />
     <axis
-      xyz="0 0 -1" />
+      xyz="0 0 1" />
     <limit
       lower="-3.1241"
       upper="3.1241"
@@ -189,11 +184,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+        xyz="0 0.0125 0"
+        rpy="1.57079 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_motor2.stl" />
+        <cylinder radius="0.05" length="0.065"/>
       </geometry>
     </collision>
   </link>
@@ -242,11 +236,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0.05 -0.025 0.12"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_link2.stl" />
+        <cylinder radius="0.06" length="0.18"/>
       </geometry>
     </collision>
   </link>
@@ -303,11 +296,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+        xyz="0 0.0125 0"
+        rpy="1.57079 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_motor3.stl" />
+        <cylinder radius="0.05" length="0.065"/>
       </geometry>
     </collision>
   </link>
@@ -356,11 +348,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0.045 0.03"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_link3.stl" />
+        <box size="0.1 0.03 0.1"/>
       </geometry>
     </collision>
   </link>
@@ -417,11 +408,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0 0.0125"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_motor4.stl" />
+        <cylinder radius="0.05" length="0.065"/>
       </geometry>
     </collision>
   </link>
@@ -470,11 +460,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0 0.044"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_link4.stl" />
+        <cylinder radius="0.05" length="0.1"/>
       </geometry>
     </collision>
   </link>
@@ -531,11 +520,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
+        xyz="0 0.0125 0"
+        rpy="1.57079 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_motor5.stl" />
+        <cylinder radius="0.04" length="0.065"/>
       </geometry>
     </collision>
   </link>
@@ -584,11 +572,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0.045 0.01"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_link5.stl" />
+        <box size="0.1 0.03 0.1"/>
       </geometry>
     </collision>
   </link>
@@ -645,11 +632,10 @@
     </visual>
     <collision>
       <origin
-        xyz="0 0 0"
+        xyz="0 0 0.0125"
         rpy="0 0 0" />
       <geometry>
-        <mesh
-          filename="file://$(find igus_rebel_description)/meshes/robolink_rebel2/simplified_link6.stl" />
+        <cylinder radius="0.04" length="0.065"/>
       </geometry>
     </collision>
   </link>
@@ -674,7 +660,4 @@
       damping="0.0"
       friction="0.0" />
   </joint>
-
-  <xacro:gripper parent_link="link6" prefix=""/>
-
 </robot>

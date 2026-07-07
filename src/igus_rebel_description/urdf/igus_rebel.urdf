@@ -1,8 +1,6 @@
 <?xml version="1.0"?>
 <robot name="igus_rebel">
 
-
-
 <!-- measured from model -->
   <link name="base_link">
     <visual>
@@ -247,30 +245,5 @@
       <inertia ixx="0.03" iyy="0.03" izz="0.03" ixy="0.0" ixz="0.0" iyz="0.0" />
     </inertial>
   </link>
-
-  <link name="gripper">
-    <visual>
-      <geometry>
-        <mesh filename="package://igus_rebel_description/meshes/robolink_rebel/ZF-Gripper-V04.dae" scale="0.001 0.001 0.001" />
-      </geometry>
-      <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
-    </visual>
-    <collision>
-      <geometry>
-        <mesh filename="package://igus_rebel_description/meshes/robolink_rebel/ZF-Gripper-V04.dae" scale="0.001 0.001 0.001" />
-      </geometry>
-       <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
-    </collision>
-    <inertial>
-      <mass value="0.1" />
-      <inertia ixx="0.03" iyy="0.03" izz="0.03" ixy="0.0" ixz="0.0" iyz="0.0" />
-    </inertial>
-  </link>
-
-  <joint name="gripper_joint" type="fixed">
-    <parent link="link_8"/> 
-    <child link="gripper"/>
-    <origin rpy="1.57 0 0" xyz="0 -0.02 0"/>
-  </joint>
-
+  
 </robot>
