@@ -67,6 +67,16 @@ def generate_launch_description():
         output='screen'
     ) 
 
+    ros_gz_bridge = Node(
+    package='ros_gz_bridge',
+    executable='parameter_bridge',
+    arguments=[
+        '/overhead_camera/color/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/overhead_camera/depth/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+    ],
+    output='screen'
+    )
+
     # Include the ROS controllers launch file
     ros_controllers_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -79,5 +89,6 @@ def generate_launch_description():
         gz_bridge,
         gz_sim_launch,
         spawn_node,
+        ros_gz_bridge,
         TimerAction(period=10.0, actions=[ros_controllers_launch]),
     ])

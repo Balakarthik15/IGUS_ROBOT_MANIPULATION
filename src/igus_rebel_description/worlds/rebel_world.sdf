@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <sdf version="1.8">
   <world name="rebel_lab_world">
-    
+
     <physics name="1ms" type="ignored">
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
@@ -10,6 +10,9 @@
     <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
     <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
 
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>
@@ -48,7 +51,7 @@
 
     <model name="lab_table">
       <static>true</static>
-      <pose>0 0 0.375 0 0 0</pose> 
+      <pose>0 0 0.375 0 0 0</pose>
       <link name="table_top">
         <collision name="collision">
           <geometry>
@@ -73,7 +76,7 @@
 
     <model name="robot_base_plate">
       <static>true</static>
-      <pose>0 0 0.775 0 0 0</pose> 
+      <pose>0 0 0.775 0 0 0</pose>
       <link name="plate_link">
         <collision name="collision">
           <geometry>
@@ -91,6 +94,198 @@
           <material>
             <ambient>0.5 0.5 0.5 1</ambient>
             <diffuse>0.6 0.6 0.6 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Overhead camera stand                                        -->
+    <!-- Pole rises just outside the table's edge (avoids sitting in  -->
+    <!-- the robot's swept volume), then a horizontal arm brings the  -->
+    <!-- camera in to look straight down at the table center, so both -->
+    <!-- the pick side (+x) and place side (-x) stay in frame.        -->
+    <!-- ============================================================ -->
+    <model name="overhead_camera_mount">
+      <static>true</static>
+      <pose>0 0 0 0 0 0</pose>
+      <link name="mount_link">
+
+        <!-- Vertical pole, just past the table's x edge (table half-width 0.6) -->
+        <collision name="pole_collision">
+          <pose>0.75 0 0.8 0 0 0</pose>
+          <geometry><box><size>0.04 0.04 1.6</size></box></geometry>
+        </collision>
+        <visual name="pole_visual">
+          <pose>0.75 0 0.8 0 0 0</pose>
+          <geometry><box><size>0.04 0.04 1.6</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.25 0.25 0.25 1</diffuse>
+          </material>
+        </visual>
+
+        <!-- Horizontal arm bringing the camera in over the table center -->
+        <collision name="arm_collision">
+          <pose>0.375 0 1.6 0 0 0</pose>
+          <geometry><box><size>0.75 0.04 0.04</size></box></geometry>
+        </collision>
+        <visual name="arm_visual">
+          <pose>0.375 0 1.6 0 0 0</pose>
+          <geometry><box><size>0.75 0.04 0.04</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.25 0.25 0.25 1</diffuse>
+          </material>
+        </visual>
+
+        <!-- Camera housing (roughly D455-sized), pitched to look straight down -->
+        <visual name="camera_housing_visual">
+          <pose>0 0 1.6 0 1.5707963 0</pose>
+          <geometry><box><size>0.09 0.025 0.025</size></box></geometry>
+          <material>
+            <ambient>0.05 0.05 0.05 1</ambient>
+            <diffuse>0.08 0.08 0.08 1</diffuse>
+          </material>
+        </visual>
+
+        <!-- Color camera, D455-like FOV (~87 deg horizontal) -->
+        <sensor name="overhead_color_camera" type="camera">
+          <pose>0 0 1.6 0 1.5707963 0</pose>
+          <camera>
+            <horizontal_fov>1.518</horizontal_fov>
+            <image><width>1280</width><height>720</height></image>
+            <clip><near>0.1</near><far>10</far></clip>
+          </camera>
+          <always_on>true</always_on>
+          <update_rate>30</update_rate>
+          <visualize>true</visualize>
+          <topic>overhead_camera/color/image_raw</topic>
+        </sensor>
+
+        <!-- Depth camera, same pose/FOV, for stack-height / occupancy checks -->
+        <sensor name="overhead_depth_camera" type="depth_camera">
+          <pose>0 0 1.6 0 1.5707963 0</pose>
+          <camera>
+            <horizontal_fov>1.518</horizontal_fov>
+            <image><width>1280</width><height>720</height></image>
+            <clip><near>0.1</near><far>10</far></clip>
+          </camera>
+          <always_on>true</always_on>
+          <update_rate>30</update_rate>
+          <topic>overhead_camera/depth/image_raw</topic>
+        </sensor>
+
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Duplo-style pick blocks (2x2 footprint, ~31.8mm x 31.8mm x    -->
+    <!-- 48mm), placed on the +x side of the table (pick area), clear -->
+    <!-- of the robot base plate (which spans roughly x=-0.35..0.35). -->
+    <!-- Free-floating rigid bodies (not static) so the gripper can   -->
+    <!-- actually pick them up.                                       -->
+    <!-- ============================================================ -->
+
+    <model name="duplo_block_red">
+      <pose>0.45 -0.15 0.774 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.02</mass>
+          <inertia>
+            <ixx>0.0000067</ixx><iyy>0.0000067</iyy><izz>0.0000067</izz>
+            <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry><box><size>0.0318 0.0318 0.048</size></box></geometry>
+          <surface>
+            <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.0318 0.0318 0.048</size></box></geometry>
+          <material>
+            <ambient>0.8 0.1 0.1 1</ambient>
+            <diffuse>0.8 0.1 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="duplo_block_green">
+      <pose>0.45 -0.05 0.774 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.02</mass>
+          <inertia>
+            <ixx>0.0000067</ixx><iyy>0.0000067</iyy><izz>0.0000067</izz>
+            <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry><box><size>0.0318 0.0318 0.048</size></box></geometry>
+          <surface>
+            <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.0318 0.0318 0.048</size></box></geometry>
+          <material>
+            <ambient>0.1 0.7 0.15 1</ambient>
+            <diffuse>0.1 0.7 0.15 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="duplo_block_yellow">
+      <pose>0.45 0.05 0.774 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.02</mass>
+          <inertia>
+            <ixx>0.0000067</ixx><iyy>0.0000067</iyy><izz>0.0000067</izz>
+            <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry><box><size>0.0318 0.0318 0.048</size></box></geometry>
+          <surface>
+            <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.0318 0.0318 0.048</size></box></geometry>
+          <material>
+            <ambient>0.9 0.85 0.1 1</ambient>
+            <diffuse>0.9 0.85 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="duplo_block_blue">
+      <pose>0.45 0.15 0.774 0 0 0</pose>
+      <link name="link">
+        <inertial>
+          <mass>0.02</mass>
+          <inertia>
+            <ixx>0.0000067</ixx><iyy>0.0000067</iyy><izz>0.0000067</izz>
+            <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry><box><size>0.0318 0.0318 0.048</size></box></geometry>
+          <surface>
+            <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.0318 0.0318 0.048</size></box></geometry>
+          <material>
+            <ambient>0.1 0.3 0.8 1</ambient>
+            <diffuse>0.1 0.3 0.8 1</diffuse>
           </material>
         </visual>
       </link>
