@@ -90,5 +90,8 @@ are defined
     <disable_collisions link1="link4" link2="link6" reason="Adjacent" />
     <disable_collisions link1="motor5" link2="link5" reason="Adjacent" />
     <disable_collisions link1="link5" link2="link6" reason="Adjacent" />
+    <disable_collisions link1="link6" link2="gripper_base" reason="Adjacent" />
+    <disable_collisions link1="gripper_base" link2="gripper_left" reason="Adjacent" />
+    <disable_collisions link1="gripper_base" link2="gripper_right" reason="Adjacent" />
 
 </robot>

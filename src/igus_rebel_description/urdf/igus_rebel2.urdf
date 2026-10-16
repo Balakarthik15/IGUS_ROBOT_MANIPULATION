@@ -823,7 +823,7 @@
   <joint name="world_to_camera_stand" type="fixed">
     <parent link="world"/>
     <child link="camera_stand_pole"/>
-    <origin xyz="0 -0.70 0.3725" rpy="0 0 0"/>  <!-- adjust to YOUR measured position -->
+    <origin xyz="0.31 -0.65 0.3725" rpy="0 0 0"/>  <!-- adjust to YOUR measured position -->
   </joint>
 
   <link name="camera_stand_horizontal">
@@ -843,7 +843,7 @@
     <child link="camera_stand_horizontal"/>
     <origin xyz="0 0.435 0.3975" rpy="0 0 -1.5708"/>
   </joint>
-  <link name="camera_link">
+  <link name="camera_visual_link">
     <visual>
       <geometry><box size="0.10 0.10 0.05"/></geometry>
     </visual>
@@ -857,7 +857,7 @@
   </link>
   <joint name="camera_stand_to_camera" type="fixed">
     <parent link="camera_stand_horizontal"/>
-    <child link="camera_link"/>
+    <child link="camera_visual_link"/>
     <origin xyz="-0.395 0 -0.060" rpy="0 0 0"/>
   </joint>
 

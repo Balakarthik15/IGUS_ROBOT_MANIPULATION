@@ -77,6 +77,7 @@ constexpr int8_t KEYCODE_T = 0x74;
 constexpr int8_t KEYCODE_W = 0x77;
 constexpr int8_t KEYCODE_E = 0x65;
 constexpr int8_t KEYCODE_S = 0x73;
+
 }  // namespace
 
 // Some constants used in the Servo Teleop demo
@@ -162,7 +163,7 @@ KeyboardServo::KeyboardServo() : joint_vel_cmd_(0.05), command_frame_id_{ "base_
   joint_pub_ = nh_->create_publisher<control_msgs::msg::JointJog>(JOINT_TOPIC, ROS_QUEUE_SIZE);
 
   // Client for switching input types
-  switch_input_ = nh_->create_client<moveit_msgs::srv::ServoCommandType>("servo_node/switch_command_type");
+  switch_input_ = nh_->create_client<moveit_msgs::srv::ServoCommandType>("/servo_node/switch_command_type");
 }
 
 KeyboardReader input;
@@ -228,7 +229,12 @@ int KeyboardServo::keyLoop()
       return -1;
     }
 
-    RCLCPP_DEBUG(nh_->get_logger(), "value: 0x%02X\n", c);
+    RCLCPP_INFO(
+    nh_->get_logger(),
+    "KEY: 0x%02X (%c)",
+    static_cast<unsigned char>(c),
+    c);
+
 
     // // Create the messages we might publish
     auto twist_msg = std::make_unique<geometry_msgs::msg::TwistStamped>();
