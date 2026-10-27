@@ -1,0 +1,26 @@
+digraph G {
+"base_link" -> "motor1"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"world" -> "base_link"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"link1" -> "motor2"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"motor1" -> "link1"[label=" Broadcaster: Authority undetectable\nAverage rate: 19.67\nBuffer length: 10.015\nMost recent transform: 2786.355\nOldest transform: 2776.34\n"];
+"link2" -> "motor3"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"motor2" -> "link2"[label=" Broadcaster: Authority undetectable\nAverage rate: 19.67\nBuffer length: 10.015\nMost recent transform: 2786.355\nOldest transform: 2776.34\n"];
+"link3" -> "motor4"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"motor3" -> "link3"[label=" Broadcaster: Authority undetectable\nAverage rate: 19.67\nBuffer length: 10.015\nMost recent transform: 2786.355\nOldest transform: 2776.34\n"];
+"link4" -> "motor5"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"motor4" -> "link4"[label=" Broadcaster: Authority undetectable\nAverage rate: 19.67\nBuffer length: 10.015\nMost recent transform: 2786.355\nOldest transform: 2776.34\n"];
+"camera_visual_link" -> "camera_color_optical_frame"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"camera_stand_horizontal" -> "camera_visual_link"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"camera_stand_pole" -> "camera_stand_horizontal"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"world" -> "camera_stand_pole"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"link6" -> "gripper_base"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"link5" -> "link6"[label=" Broadcaster: Authority undetectable\nAverage rate: 19.67\nBuffer length: 10.015\nMost recent transform: 2786.355\nOldest transform: 2776.34\n"];
+"gripper_base" -> "gripper_tcp"[label=" Broadcaster: Authority undetectable\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"gripper_base" -> "gripper_left"[label=" Broadcaster: Authority undetectable\nAverage rate: 21.029\nBuffer length: 10.034\nMost recent transform: 2786.385\nOldest transform: 2776.351\n"];
+"gripper_base" -> "gripper_right"[label=" Broadcaster: Authority undetectable\nAverage rate: 21.029\nBuffer length: 10.034\nMost recent transform: 2786.385\nOldest transform: 2776.351\n"];
+"motor5" -> "link5"[label=" Broadcaster: Authority undetectable\nAverage rate: 19.67\nBuffer length: 10.015\nMost recent transform: 2786.355\nOldest transform: 2776.34\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1792836496.921087"[ shape=plaintext ] ;
+}->"world";
+}

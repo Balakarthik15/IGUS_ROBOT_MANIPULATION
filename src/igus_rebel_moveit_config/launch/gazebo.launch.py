@@ -6,6 +6,7 @@ from launch.substitutions import LaunchConfiguration
 
 import os
 from ament_index_python.packages import get_package_share_directory
+from launch.actions import AppendEnvironmentVariable
 
 def generate_launch_description():
     
@@ -31,6 +32,10 @@ def generate_launch_description():
             'gz_args': '-r rebel_world.sdf'
         }.items()
     )
+
+    set_models = AppendEnvironmentVariable(
+        "GZ_SIM_RESOURCE_PATH",
+        os.path.join(get_package_share_directory("igus_rebel_description"), "models"))
 
     # 2. FIX: Synchronized package name to match your active 'rebel_movieit' package
     moveit_pkg_name = 'igus_rebel_moveit_config'
@@ -67,15 +72,6 @@ def generate_launch_description():
         output='screen'
     ) 
 
-    ros_gz_bridge = Node(
-    package='ros_gz_bridge',
-    executable='parameter_bridge',
-    arguments=[
-        '/overhead_camera/color/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
-        '/overhead_camera/depth/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
-    ],
-    output='screen'
-    )
 
     # Include the ROS controllers launch file
     ros_controllers_launch = IncludeLaunchDescription(
@@ -88,7 +84,7 @@ def generate_launch_description():
         use_sim_time_arg,
         gz_bridge,
         gz_sim_launch,
+        set_models,
         spawn_node,
-        ros_gz_bridge,
         TimerAction(period=10.0, actions=[ros_controllers_launch]),
     ])

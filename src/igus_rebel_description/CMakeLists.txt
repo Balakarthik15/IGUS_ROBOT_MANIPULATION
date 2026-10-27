@@ -15,7 +15,7 @@ find_package(ament_cmake REQUIRED)
 # Install
 ################################################################################
 install(
-  DIRECTORY meshes urdf worlds
+  DIRECTORY meshes urdf worlds models
   DESTINATION share/${PROJECT_NAME}
 )
 

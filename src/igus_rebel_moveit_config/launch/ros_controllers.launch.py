@@ -30,9 +30,24 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}],
         output="both",
     )
+
+    gripper_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        name="gripper_bridge",
+        arguments=[
+            "/gripper/left/cmd_pos@std_msgs/msg/Float64]gz.msgs.Double",
+            "/gripper/right/cmd_pos@std_msgs/msg/Float64]gz.msgs.Double",
+            "/gripper/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model",
+        ],
+        remappings=[("/gripper/joint_states", "/joint_states")],
+        parameters=[{'use_sim_time': True}],
+        output="both",
+    )
     
     return LaunchDescription([
         robot_trajectory_controller_spawner,
         # robot_position_controller_spawner,
         joint_state_broadcaster_spawner,
+        gripper_bridge,
     ])

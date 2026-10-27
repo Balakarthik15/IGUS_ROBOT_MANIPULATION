@@ -71,7 +71,7 @@ class HSVCalibrator(Node):
             if w < h:
                 angle += 90.0
 
-            #print(f"Block at pixel ({cx:.1f}, {cy:.1f}),  width ({w:.1f} mm, {h:.1f} mm), (angle={angle:.1f} deg")
+            print(f"Block at pixel ({cx:.1f}, {cy:.1f}),  width ({w:.1f} mm, {h:.1f} mm), (angle={angle:.1f} deg")
     
         result = cv2.bitwise_and(frame, frame, mask=mask)
         cv2.imshow("Frame", frame)

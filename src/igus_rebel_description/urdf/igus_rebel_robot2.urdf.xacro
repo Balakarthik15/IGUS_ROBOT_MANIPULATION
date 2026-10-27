@@ -2,12 +2,23 @@
 <robot xmlns:xacro="http://wiki.ros.org/xacro"
        name="igus_rebel" >
   <xacro:arg name="hardware_protocol" default="rebel"/>
-  <!-- igus_rebel -->
+  <xacro:property name="hw_protocol" value="$(arg hardware_protocol)"/>
+
+  <!-- igus_rebel arm and camera stand (no gripper in this file any more) -->
   <xacro:include filename="$(find igus_rebel_description)/urdf/igus_rebel2.urdf" />
+
+  <!-- Gripper, simulated moving fingers in Gazebo, real gripper meshes for everything else -->
+  <xacro:if value="${hw_protocol == 'gazebo'}">
+    <xacro:include filename="$(find igus_rebel_description)/urdf/sim_gripper.xacro"/>
+    <xacro:include filename="$(find igus_rebel_description)/urdf/sim_camera.xacro"/>
+  </xacro:if>
+  <xacro:unless value="${hw_protocol == 'gazebo'}">
+    <xacro:include filename="$(find igus_rebel_description)/urdf/gripper_real.xacro"/>
+  </xacro:unless>
 
   <xacro:include filename="$(find igus_rebel_description)/urdf/igus_rebel2.control.xacro"/>
   <xacro:igus_rebel_control arm_id="rebel_arm" hardware_protocol="$(arg hardware_protocol)"/>
-  
+
   <link name="world" />
 
   <joint name="world_joint" type="fixed">
@@ -15,5 +26,5 @@
     <child link = "base_link" />
     <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
   </joint>
-
+  
 </robot>

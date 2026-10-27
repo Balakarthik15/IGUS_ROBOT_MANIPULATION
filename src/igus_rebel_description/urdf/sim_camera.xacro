@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    Simulation only overhead camera (used when hardware_protocol is gazebo).
+
+    The camera stand and the camera body already exist in the main URDF
+    (camera_stand_pole, camera_stand_horizontal, camera_visual_link).
+    This file only adds an optical frame and the Gazebo color and depth sensors
+    on that same camera_visual_link, so the camera sits exactly on the URDF mount.
+
+    The sensor looks straight down. A Gazebo camera looks along its own x axis,
+    so the sensor is pitched by 90 degrees.
+    Topic names match the old world file, so the existing ros_gz_bridge keeps working.
+  -->
+
+  <!-- Optical frame (z forward, x right, y down) like the real D455 color optical frame -->
+  <link name="camera_color_optical_frame"/>
+  <joint name="camera_color_optical_joint" type="fixed">
+    <parent link="camera_visual_link"/>
+    <child link="camera_color_optical_frame"/>
+    <origin xyz="0 0 -0.03" rpy="3.14159265 0 -1.5707963"/>
+  </joint>
+
+  <gazebo reference="camera_visual_link">
+
+    <sensor name="overhead_color_camera" type="camera">
+      <pose>0 0 -0.03 0 1.5707963 0</pose>
+      <gz_frame_id>camera_color_optical_frame</gz_frame_id>
+      <camera>
+        <horizontal_fov>1.518</horizontal_fov>
+        <image><width>1280</width><height>720</height></image>
+        <clip><near>0.1</near><far>10</far></clip>
+      </camera>
+      <always_on>true</always_on>
+      <update_rate>30</update_rate>
+      <visualize>true</visualize>
+      <topic>overhead_camera/color/image_raw</topic>
+    </sensor>
+
+    <sensor name="overhead_depth_camera" type="depth_camera">
+      <pose>0 0 -0.03 0 1.5707963 0</pose>
+      <gz_frame_id>camera_color_optical_frame</gz_frame_id>
+      <camera>
+        <horizontal_fov>1.518</horizontal_fov>
+        <image><width>1280</width><height>720</height></image>
+        <clip><near>0.1</near><far>10</far></clip>
+      </camera>
+      <always_on>true</always_on>
+      <update_rate>30</update_rate>
+      <topic>overhead_camera/depth/image_raw</topic>
+    </sensor>
+
+  </gazebo>
+
+</robot>

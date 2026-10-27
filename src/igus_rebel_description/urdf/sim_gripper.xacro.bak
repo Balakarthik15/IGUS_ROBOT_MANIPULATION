@@ -1,0 +1,113 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    Simulation-only gripper (used when hardware_protocol is gazebo).
+
+    Same link and joint names as the real gripper (gripper_base, gripper_left,
+    gripper_right, gripper_left_joint, gripper_right_joint, gripper_mount_joint),
+    so the SRDF keeps working with both.
+
+    Frame of gripper_base, z is the approach direction (towards the fingertips),
+    fingers slide along the y axis.
+    Joint value 0.0 = fully open (100 mm gap). Positive value = closing.
+    Touching a 31.8 mm wide block needs about 0.034 per finger.
+
+    This file has its own mount joint, because the real one has a 90 degree
+    roll that belongs to the real STL frame. If the fingers close in the wrong
+    direction in RViz, turn the gripper around the approach axis with
+    rpy="0 0 1.5708" in gripper_mount_joint below.
+  -->
+
+  <xacro:property name="open_gap"   value="0.100"/>
+  <xacro:property name="finger_w"   value="0.020"/>
+  <xacro:property name="finger_d"   value="0.030"/>
+  <xacro:property name="finger_l"   value="0.060"/>
+  <xacro:property name="palm_h"     value="0.040"/>
+  <xacro:property name="max_travel" value="0.045"/>
+  <xacro:property name="finger_y"   value="${open_gap/2 + finger_w/2}"/>
+  <xacro:property name="finger_z"   value="${palm_h + finger_l/2}"/>
+  <xacro:property name="tcp_z"      value="${palm_h + finger_l - 0.01}"/>
+
+  <link name="gripper_base">
+    <visual>
+      <origin xyz="0 0 ${palm_h/2}" rpy="0 0 0"/>
+      <geometry><box size="0.06 0.14 ${palm_h}"/></geometry>
+      <material name="sim_grip_palm"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${palm_h/2}" rpy="0 0 0"/>
+      <geometry><box size="0.06 0.14 ${palm_h}"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 ${palm_h/2}" rpy="0 0 0"/>
+      <mass value="0.5"/>
+      <inertia ixx="8.83e-4" ixy="0" ixz="0" iyy="2.17e-4" iyz="0" izz="9.67e-4"/>
+    </inertial>
+  </link>
+
+  <joint name="gripper_mount_joint" type="fixed">
+    <parent link="link6"/>
+    <child link="gripper_base"/>
+    <origin xyz="0 0 0.054" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:macro name="sim_finger" params="name y_sign color">
+    <link name="${name}">
+      <visual>
+        <geometry><box size="${finger_d} ${finger_w} ${finger_l}"/></geometry>
+        <material name="sim_grip_${name}"><color rgba="${color}"/></material>
+      </visual>
+      <collision>
+        <geometry><box size="${finger_d} ${finger_w} ${finger_l}"/></geometry>
+      </collision>
+      <inertial>
+        <mass value="0.1"/>
+        <inertia ixx="3.3e-5" ixy="0" ixz="0" iyy="3.75e-5" iyz="0" izz="1.08e-5"/>
+      </inertial>
+    </link>
+
+    <joint name="${name}_joint" type="prismatic">
+      <parent link="gripper_base"/>
+      <child link="${name}"/>
+      <origin xyz="0 ${y_sign*finger_y} ${finger_z}" rpy="0 0 0"/>
+      <axis xyz="0 ${-y_sign} 0"/>
+      <limit lower="0.0" upper="${max_travel}" effort="20" velocity="0.1"/>
+      <dynamics damping="1.0" friction="0.0"/>
+    </joint>
+
+    <gazebo reference="${name}">
+      <mu1>1.5</mu1>
+      <mu2>1.5</mu2>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:sim_finger name="gripper_left"  y_sign="1"  color="0.9 0.5 0.1 1"/>
+  <xacro:sim_finger name="gripper_right" y_sign="-1" color="0.9 0.5 0.1 1"/>
+
+  <!-- Tool centre point between the fingertips. -->
+  <link name="gripper_tcp"/>
+  <joint name="gripper_tcp_joint" type="fixed">
+    <parent link="gripper_base"/>
+    <child link="gripper_tcp"/>
+    <origin xyz="0 0 ${tcp_z}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Finger command and state interfaces for Gazebo (separate system from the arm) -->
+  <ros2_control name="gripper_system" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    <joint name="gripper_left_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="gripper_right_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+</robot>
