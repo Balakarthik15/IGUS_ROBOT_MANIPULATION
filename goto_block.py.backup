@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""
+Verify the calibration: block pixel -> robot pose -> move there.
+
+Needs homography_tool.json (with pick_offset_xy_m) in the same folder.
+
+1) Only compute, do not move (always do this first):
+     python3 goto_block.py 544.5 375.5 --dry
+
+2) Move link6 ABOVE the block (pre-grasp, 5 cm above grasp height):
+     python3 goto_block.py 544.5 375.5 --go pre
+
+3) Then go DOWN to grasp height (fingers open, do not close yet):
+     python3 goto_block.py 544.5 375.5 --go grasp
+
+Look from above: the block must sit in the middle between the fingers.
+
+Yaw: for this first test, put the block in the SAME direction as in the
+calibration (fingers closing across the short side at yaw about -4 deg).
+Then the default --yaw-deg -4.2 is correct.
+
+Motion goes through MoveIt (move_group action /move_action), slow (10 %).
+Stop jogging with servo while this runs. Keep a hand on the E-stop.
+If your planning group is not called "rebel_arm", pass --group NAME
+(you see the name in RViz, MotionPlanning panel, "Planning Group").
+"""
+import argparse
+import json
+import math
+import os
+import sys
+
+import numpy as np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def pixel_to_base(u, v, calib, h=0.0):
+    """Pixel -> base_link x y (m) on the table, then the height correction for a point h above it."""
+    p = np.asarray(calib["H"]) @ np.array([u, v, 1.0])
+    xy = p[:2] / p[2]
+    if h:
+        nadir = np.array(calib["nadir_xy"])
+        xy = nadir + (xy - nadir) * (1.0 - h / calib["cam_height_m"])
+    return xy
+
+
+CALIB = os.path.join(HERE, "homography_tool.json")
+BLOCK_H = 0.019
+GRASP_Z = 0.126        # link6 z with fingers closed on the block, tips 3-5 mm above table
+PRE_Z = GRASP_Z + 0.050
+BASE, EEF = "base_link", "link6"
+
+
+def target_xy(u, v):
+    with open(CALIB) as f:
+        c = json.load(f)
+    xy = pixel_to_base(u, v, c, BLOCK_H)
+    return xy + np.array(c["pick_offset_xy_m"])
+
+
+def down_quat(yaw_deg):
+    """link6 pointing straight down, turned by yaw. Same as your measured poses:
+    yaw -4.2 deg gives about (0.999, -0.037, 0, 0) in x y z w."""
+    a = math.radians(yaw_deg) / 2.0
+    # Rz(yaw) * Rx(180): q = (cos a, sin a, 0, 0) in x y z w
+    return (math.cos(a), math.sin(a), 0.0, 0.0)
+
+
+def send(x, y, z, q, group, speed):
+    import rclpy
+    from rclpy.action import ActionClient
+    from rclpy.node import Node
+    from moveit_msgs.action import MoveGroup
+    from moveit_msgs.msg import Constraints, PositionConstraint, OrientationConstraint
+    from shape_msgs.msg import SolidPrimitive
+    from geometry_msgs.msg import Pose
+
+    rclpy.init()
+    node = Node("goto_block")
+    cli = ActionClient(node, MoveGroup, "/move_action")
+    if not cli.wait_for_server(timeout_sec=10.0):
+        print("move_group action /move_action not found. Is MoveIt (move_group) running?")
+        return False
+
+    goal = MoveGroup.Goal()
+    r = goal.request
+    r.group_name = group
+    r.num_planning_attempts = 5
+    r.allowed_planning_time = 5.0
+    r.max_velocity_scaling_factor = speed
+    r.max_acceleration_scaling_factor = speed
+    r.start_state.is_diff = True
+    r.workspace_parameters.header.frame_id = BASE
+
+    pc = PositionConstraint()
+    pc.header.frame_id = BASE
+    pc.link_name = EEF
+    box = SolidPrimitive(type=SolidPrimitive.SPHERE, dimensions=[0.001])
+    pose = Pose()
+    pose.position.x, pose.position.y, pose.position.z = x, y, z
+    pose.orientation.w = 1.0
+    pc.constraint_region.primitives.append(box)
+    pc.constraint_region.primitive_poses.append(pose)
+    pc.weight = 1.0
+
+    oc = OrientationConstraint()
+    oc.header.frame_id = BASE
+    oc.link_name = EEF
+    oc.orientation.x, oc.orientation.y, oc.orientation.z, oc.orientation.w = q
+    oc.absolute_x_axis_tolerance = 0.01
+    oc.absolute_y_axis_tolerance = 0.01
+    oc.absolute_z_axis_tolerance = 0.01
+    oc.weight = 1.0
+
+    r.goal_constraints.append(Constraints(position_constraints=[pc], orientation_constraints=[oc]))
+    goal.planning_options.plan_only = False
+
+    fut = cli.send_goal_async(goal)
+    rclpy.spin_until_future_complete(node, fut)
+    gh = fut.result()
+    if not gh.accepted:
+        print("goal rejected")
+        return False
+    res_fut = gh.get_result_async()
+    rclpy.spin_until_future_complete(node, res_fut)
+    code = res_fut.result().result.error_code.val
+    print("MoveIt result code: %d (%s)" % (code, "SUCCESS" if code == 1 else "failed, see move_group terminal"))
+    node.destroy_node()
+    rclpy.shutdown()
+    return code == 1
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("u", type=float)
+    ap.add_argument("v", type=float)
+    ap.add_argument("--yaw-deg", type=float, default=-4.2)
+    ap.add_argument("--go", choices=["pre", "grasp"], default="pre")
+    ap.add_argument("--dry", action="store_true", help="only print, do not move")
+    ap.add_argument("--group", default="igus_rebel_arm")
+    ap.add_argument("--speed", type=float, default=0.1)
+    a = ap.parse_args()
+
+    xy = target_xy(a.u, a.v)
+    z = PRE_Z if a.go == "pre" else GRASP_Z
+    q = down_quat(a.yaw_deg)
+    print("block pixel     : %.1f %.1f" % (a.u, a.v))
+    print("link6 target    : x %.4f  y %.4f  z %.4f  (%s)" % (xy[0], xy[1], z, a.go))
+    print("orientation xyzw: %.4f %.4f %.4f %.4f  (straight down, yaw %.1f deg)" % (q + (a.yaw_deg,)))
+    if a.dry:
+        print("dry run, robot not moved")
+        sys.exit(0)
+    sys.exit(0 if send(xy[0], xy[1], z, q, a.group, a.speed) else 1)

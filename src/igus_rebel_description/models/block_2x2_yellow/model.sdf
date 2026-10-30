@@ -3,81 +3,16 @@
   <model name="block_2x2_yellow">
     <link name="link">
       <inertial>
-        <pose>0 0 0.00950 0 0 0</pose>
+        <pose>0 0 0.01175 0 0 0</pose>
         <mass>0.00600</mass>
-        <inertia>
-          <ixx>6.8930e-07</ixx><iyy>6.8930e-07</iyy><izz>1.0176e-06</izz>
-          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
-        </inertia>
+        <inertia><ixx>7.8493e-07</ixx><iyy>7.8493e-07</iyy><izz>1.0176e-06</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
       </inertial>
-        <collision name="body_collision">
-          <pose>0 0 0.00950 0 0 0</pose>
-          <geometry><box><size>0.03190 0.03190 0.01900</size></box></geometry>
-          <surface>
-            <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
-          </surface>
-        </collision>
-        <visual name="body_visual">
-          <pose>0 0 0.00950 0 0 0</pose>
-          <geometry><box><size>0.03190 0.03190 0.01900</size></box></geometry>
-          <material>
-            <ambient>0.95 0.80 0.05 1</ambient>
-            <diffuse>0.95 0.80 0.05 1</diffuse>
-            <specular>0.2 0.2 0.2 1</specular>
-          </material>
-        </visual>
-        <collision name="stud0_collision">
-          <pose>-0.00797 -0.00797 0.02125 0 0 0</pose>
-          <geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry>
-        </collision>
-        <visual name="stud0_visual">
-          <pose>-0.00797 -0.00797 0.02125 0 0 0</pose>
-          <geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry>
-          <material>
-            <ambient>0.95 0.80 0.05 1</ambient>
-            <diffuse>0.95 0.80 0.05 1</diffuse>
-            <specular>0.2 0.2 0.2 1</specular>
-          </material>
-        </visual>
-        <collision name="stud1_collision">
-          <pose>-0.00797 0.00797 0.02125 0 0 0</pose>
-          <geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry>
-        </collision>
-        <visual name="stud1_visual">
-          <pose>-0.00797 0.00797 0.02125 0 0 0</pose>
-          <geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry>
-          <material>
-            <ambient>0.95 0.80 0.05 1</ambient>
-            <diffuse>0.95 0.80 0.05 1</diffuse>
-            <specular>0.2 0.2 0.2 1</specular>
-          </material>
-        </visual>
-        <collision name="stud2_collision">
-          <pose>0.00797 -0.00797 0.02125 0 0 0</pose>
-          <geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry>
-        </collision>
-        <visual name="stud2_visual">
-          <pose>0.00797 -0.00797 0.02125 0 0 0</pose>
-          <geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry>
-          <material>
-            <ambient>0.95 0.80 0.05 1</ambient>
-            <diffuse>0.95 0.80 0.05 1</diffuse>
-            <specular>0.2 0.2 0.2 1</specular>
-          </material>
-        </visual>
-        <collision name="stud3_collision">
-          <pose>0.00797 0.00797 0.02125 0 0 0</pose>
-          <geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry>
-        </collision>
-        <visual name="stud3_visual">
-          <pose>0.00797 0.00797 0.02125 0 0 0</pose>
-          <geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry>
-          <material>
-            <ambient>0.95 0.80 0.05 1</ambient>
-            <diffuse>0.95 0.80 0.05 1</diffuse>
-            <specular>0.2 0.2 0.2 1</specular>
-          </material>
-        </visual>
+        <visual name="body_v"><pose>0.00000 0.00000 0.00950 0 0 0</pose><geometry><box><size>0.03190 0.03190 0.01900</size></box></geometry><material><ambient>0.990 0.770 0.290 1</ambient><diffuse>0.990 0.770 0.290 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual><collision name="body_c"><pose>0.00000 0.00000 0.00950 0 0 0</pose><geometry><box><size>0.03190 0.03190 0.01900</size></box></geometry><surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface></collision>
+        <visual name="stud0_v"><pose>-0.00797 -0.00797 0.02125 0 0 0</pose><geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry><material><ambient>0.990 0.770 0.290 1</ambient><diffuse>0.990 0.770 0.290 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual><collision name="stud0_c"><pose>-0.00797 -0.00797 0.02125 0 0 0</pose><geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry></collision><visual name="stud0_ring_v"><pose>-0.00797 -0.00797 0.02370 0 0 0</pose><geometry><cylinder><radius>0.00291</radius><length>0.00040</length></cylinder></geometry><material><ambient>0.713 0.554 0.209 1</ambient><diffuse>0.713 0.554 0.209 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual>
+        <visual name="stud1_v"><pose>-0.00797 0.00797 0.02125 0 0 0</pose><geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry><material><ambient>0.990 0.770 0.290 1</ambient><diffuse>0.990 0.770 0.290 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual><collision name="stud1_c"><pose>-0.00797 0.00797 0.02125 0 0 0</pose><geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry></collision><visual name="stud1_ring_v"><pose>-0.00797 0.00797 0.02370 0 0 0</pose><geometry><cylinder><radius>0.00291</radius><length>0.00040</length></cylinder></geometry><material><ambient>0.713 0.554 0.209 1</ambient><diffuse>0.713 0.554 0.209 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual>
+        <visual name="stud2_v"><pose>0.00797 -0.00797 0.02125 0 0 0</pose><geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry><material><ambient>0.990 0.770 0.290 1</ambient><diffuse>0.990 0.770 0.290 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual><collision name="stud2_c"><pose>0.00797 -0.00797 0.02125 0 0 0</pose><geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry></collision><visual name="stud2_ring_v"><pose>0.00797 -0.00797 0.02370 0 0 0</pose><geometry><cylinder><radius>0.00291</radius><length>0.00040</length></cylinder></geometry><material><ambient>0.713 0.554 0.209 1</ambient><diffuse>0.713 0.554 0.209 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual>
+        <visual name="stud3_v"><pose>0.00797 0.00797 0.02125 0 0 0</pose><geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry><material><ambient>0.990 0.770 0.290 1</ambient><diffuse>0.990 0.770 0.290 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual><collision name="stud3_c"><pose>0.00797 0.00797 0.02125 0 0 0</pose><geometry><cylinder><radius>0.00470</radius><length>0.00450</length></cylinder></geometry></collision><visual name="stud3_ring_v"><pose>0.00797 0.00797 0.02370 0 0 0</pose><geometry><cylinder><radius>0.00291</radius><length>0.00040</length></cylinder></geometry><material><ambient>0.713 0.554 0.209 1</ambient><diffuse>0.713 0.554 0.209 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual>
     </link>
   </model>
 </sdf>

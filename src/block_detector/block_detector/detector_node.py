@@ -1,293 +1,178 @@
+"""
+Block detector (detection only): YOLO-OBB on the colour image -> pixel centre + image angle.
 
+    ros2 run <your_package> detector_node          (or: python3 detector_node.py)
+    ros2 run <your_package> detector_node --ros-args -p show_window:=false -p conf:=0.6
 
+Publishes
+  /detector/detections   std_msgs/String, JSON:
+      {"stamp": sec, "frame": "...", "width": 1280, "height": 720,
+       "blocks": [{"id": 0, "name": "red", "conf": 0.93, "u": 612.4, "v": 401.8,
+                   "angle_img": -87.5, "long_px": 54.1, "short_px": 27.3,
+                   "corners": [[u, v], [u, v], [u, v], [u, v]]}, ...]}
+      angle_img = direction of the LONG side in the image, degrees, from +u (right) towards
+      +v (down), in (-90, 90]. id = number shown on the image (sorted left to right).
+  /detector/debug_image  the same drawing as the window (for rqt_image_view)
+
+Window (show_window:=true): boxes, id, class, confidence, pixel and angle on the live image.
+Keys in the window: s = save a snapshot, p = pause / resume.
+No depth, no TF: the conversion to robot coordinates is in homography_calib.py.
+"""
+import json
 import math
 import os
+import time
 
+import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
 from cv_bridge import CvBridge
 from ultralytics import YOLO
 
-from rclpy.time import Time
-from geometry_msgs.msg import PointStamped
-from tf2_ros import Buffer, TransformListener, TransformException
-from tf2_geometry_msgs import do_transform_point
+DRAW_BGR = {'red': (40, 40, 230), 'green': (40, 170, 40), 'yellow': (0, 200, 240),
+            'white': (240, 240, 240), 'lightblue': (230, 200, 90)}
 
-from std_msgs.msg import String
 
-from geometry_msgs.msg import PointStamped, PoseStamped
-from visualization_msgs.msg import Marker
+def long_side_angle(corners):
+    """corners (4, 2) -> angle of the long side in degrees, (-90, 90], plus long and short length"""
+    e1 = corners[1] - corners[0]
+    e2 = corners[2] - corners[1]
+    l1, l2 = np.linalg.norm(e1), np.linalg.norm(e2)
+    e = e1 if l1 >= l2 else e2
+    ang = math.degrees(math.atan2(e[1], e[0]))
+    while ang > 90:
+        ang -= 180
+    while ang <= -90:
+        ang += 180
+    return ang, max(l1, l2), min(l1, l2)
 
-MARKER_RGB = {'red': (0.9, 0.1, 0.1), 'blue': (0.1, 0.3, 0.9),
-              'yellow': (0.95, 0.85, 0.1), 'green': (0.1, 0.7, 0.2)}
 
 class DetectorNode(Node):
     def __init__(self):
         super().__init__('block_detector')
-
-        self.declare_parameter('model_path', os.path.expanduser('~/IGUS_ROBOT_MANIPULATION/YOLO_Detection/Result_runs/yolo11n_obb_sim/weights/best.pt'))
+        self.declare_parameter('model_path', os.path.expanduser('~/IGUS_ROBOT_MANIPULATION/models/best.pt'))
         self.declare_parameter('conf', 0.5)
         self.declare_parameter('imgsz', 1280)
-        self.declare_parameter('rate', 1.0)
+        self.declare_parameter('rate', 2.0)
+        self.declare_parameter('image_topic', '/camera/camera/color/image_raw')
+        self.declare_parameter('show_window', True)
+        g = lambda n: self.get_parameter(n).value  # noqa: E731
+        self.conf, self.imgsz, self.show = g('conf'), g('imgsz'), g('show_window')
 
-
-        model_path= self.get_parameter('model_path').value
-        self.conf = self.get_parameter('conf').value
-        self.imgsz = self.get_parameter('imgsz').value
-        rate = self.get_parameter('rate').value
-
-
-        self.model = YOLO(model_path)
-        self.get_logger().info(f'model loaded: {model_path}, classes {self.model.names}')
-
+        self.model = YOLO(g('model_path'))
+        self.get_logger().info(f"model loaded: {g('model_path')}, classes {self.model.names}")
 
         self.bridge = CvBridge()
         self.latest_image = None
-        self.latest_depth = None
-        self.K = None
+        self.last_view = None
+        self.paused = False
+        self.warned_size = False
 
-
-        self.image_sub = self.create_subscription(
-            Image, '/camera/camera/color/image_raw',
-            self.image_callback,
-            qos_profile_sensor_data
-        )
-        
-        self.depth_sub = self.create_subscription(
-            Image, '/camera/camera/aligned_depth_to_color/image_raw',
-            self.depth_callback, qos_profile_sensor_data)
-
-        self.info_sub = self.create_subscription(
-            CameraInfo, '/camera/camera/color/camera_info',
-            self.info_callback, qos_profile_sensor_data)
-
-        self.timer = self.create_timer(1.0 / rate, self.detect)
-
-        #tf
-        self.declare_parameter('target_frame', 'base_link')
-        self.target_frame = self.get_parameter('target_frame').value
-
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
-
-        self.declare_parameter('block_height', 0.019)
-        self.block_height = self.get_parameter('block_height').value
-
-        self.declare_parameter('max_time_diff', 0.5)
-        self.max_time_diff = self.get_parameter('max_time_diff').value
-
-        #target color
-        self.target_color = None
-        self.target_sub = self.create_subscription(
-            String, '/detector/target_color', self.target_callback, 10)
-        self.status_pub = self.create_publisher(String, '/detector/status', 10)
-
-        #marker
-
-        self.declare_parameter('block_length', 0.0638)
-        self.declare_parameter('block_width', 0.0318)
-        self.block_length = self.get_parameter('block_length').value
-        self.block_width = self.get_parameter('block_width').value
-
-        self.pose_pub = self.create_publisher(PoseStamped, '/detector/target_pose', 10)
-        self.marker_pub = self.create_publisher(Marker, '/detector/target_marker', 10)
+        self.create_subscription(Image, g('image_topic'), self.image_callback, qos_profile_sensor_data)
+        self.det_pub = self.create_publisher(String, '/detector/detections', 10)
+        self.debug_pub = self.create_publisher(Image, '/detector/debug_image', 1)
+        self.create_timer(1.0 / g('rate'), self.detect)
+        if self.show:
+            cv2.namedWindow('detections', cv2.WINDOW_NORMAL)
+            cv2.resizeWindow('detections', 1280, 720)
+            self.create_timer(0.05, self.gui)            # keeps the window responsive
 
     def image_callback(self, msg):
-        
         self.latest_image = msg
 
-    def depth_callback(self, msg):
-        self.latest_depth = msg
+    # ---------------------------------------------------------------- window
+    def gui(self):
+        if self.last_view is not None:
+            view = self.last_view
+            if self.paused:
+                view = view.copy()
+                cv2.putText(view, 'PAUSED (p)', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            cv2.imshow('detections', view)
+        k = cv2.waitKey(1) & 0xFF
+        if k == ord('p'):
+            self.paused = not self.paused
+        elif k == ord('s') and self.last_view is not None:
+            name = time.strftime('detections_%Y%m%d_%H%M%S.png')
+            cv2.imwrite(name, self.last_view)
+            self.get_logger().info(f'saved {name}')
 
-    def info_callback(self, msg):
-        if self.K is None:
-            self.K = np.array(msg.k).reshape(3, 3)
-            self.get_logger().info(
-                f'camera_info: fx {self.K[0, 0]:.1f}, fy {self.K[1, 1]:.1f}, '
-                f'cx {self.K[0, 2]:.1f}, cy {self.K[1, 2]:.1f}')
-
-
-    def depth_at(self, depth, u, v, half=3):
-            """Median depth in metres in a small square around pixel (u, v). None if no valid pixel."""
-            h, w = depth.shape
-            u, v = int(round(u)), int(round(v))
-            patch = depth[max(v - half, 0):min(v + half + 1, h),
-                        max(u - half, 0):min(u + half + 1, w)].astype(np.float32)
-            if depth.dtype == np.uint16:
-                patch = patch / 1000.0
-            valid = patch[np.isfinite(patch) & (patch > 0)]
-            if valid.size == 0:
-                return None
-            return float(np.median(valid))
-
-    def pixel_to_point(self, u, v, z):
-        """Pixel (u, v) with depth z (m) -> point (X, Y, Z) in the camera optical frame (m)."""
-        fx, fy = self.K[0, 0], self.K[1, 1]
-        cx, cy = self.K[0, 2], self.K[1, 2]
-        x = (u - cx) * z / fx
-        y = (v - cy) * z / fy
-        return x, y, z
-
-    def to_base(self, u, v, d, tf, camera_frame):
-        """Pixel (u, v) with depth d -> point (x, y, z) in the target frame."""
-        X, Y, Z = self.pixel_to_point(u, v, d)
-        p = PointStamped()
-        p.header.frame_id = camera_frame
-        p.point.x, p.point.y, p.point.z = float(X), float(Y), float(Z)
-        q = do_transform_point(p, tf).point
-        return q.x, q.y, q.z
-
-
-    def target_callback(self, msg):
-        color = msg.data.strip().lower()
-        known = list(self.model.names.values())
-        if color not in known:
-            self.get_logger().warning(f'unknown colour "{msg.data}", known: {known}')
-            return
-        self.target_color = color
-        self.get_logger().info(f'target colour set to {color}')
-
-
-    def publish_target(self, det):
-        pose = PoseStamped()
-        pose.header.frame_id = self.target_frame
-        pose.header.stamp = self.latest_image.header.stamp
-        pose.pose.position.x = det['x']
-        pose.pose.position.y = det['y']
-        pose.pose.position.z = det['z']
-        pose.pose.orientation.z = math.sin(det['yaw'] / 2.0)
-        pose.pose.orientation.w = math.cos(det['yaw'] / 2.0)
-        self.pose_pub.publish(pose)
-
-        m = Marker()
-        m.header = pose.header
-        m.ns = 'target_block'
-        m.id = 0
-        m.type = Marker.CUBE
-        m.action = Marker.ADD
-        m.pose = pose.pose
-        m.scale.x = self.block_length
-        m.scale.y = self.block_width
-        m.scale.z = self.block_height
-        r, g, b = MARKER_RGB[det['name']]
-        m.color.r, m.color.g, m.color.b, m.color.a = r, g, b, 0.8
-        self.marker_pub.publish(m)
-
-    def clear_marker(self):
-        m = Marker()
-        m.header.frame_id = self.target_frame
-        m.ns = 'target_block'
-        m.id = 0
-        m.action = Marker.DELETE
-        self.marker_pub.publish(m)
-
-
+    # ------------------------------------------------------------- detection
     def detect(self):
-        if self.latest_image is None or self.latest_depth is None or self.K is None:
+        if self.latest_image is None or self.paused:
             return
-
-        image = self.bridge.imgmsg_to_cv2(self.latest_image, desired_encoding='bgr8')
-        depth = self.bridge.imgmsg_to_cv2(self.latest_depth, desired_encoding='passthrough')
-
-        t_img = self.latest_image.header.stamp.sec + self.latest_image.header.stamp.nanosec * 1e-9
-        t_dep = self.latest_depth.header.stamp.sec + self.latest_depth.header.stamp.nanosec * 1e-9
-
-        if abs(t_img - t_dep) > self.max_time_diff:
-            self.get_logger().warning(
-                f'colour and depth {abs(t_img - t_dep) * 1000:.0f} ms apart, skipping')
-            return
+        msg = self.latest_image
+        image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        h, w = image.shape[:2]
+        if (w, h) != (1280, 720) and not self.warned_size:
+            self.get_logger().error(f'image is {w}x{h}, the calibration was made at 1280x720!')
+            self.warned_size = True
 
         result = self.model.predict(image, imgsz=self.imgsz, conf=self.conf, verbose=False)[0]
         obb = result.obb
+        blocks = []
+        if obb is not None:
+            for cls_id, conf, box, corners in zip(obb.cls.cpu().numpy(), obb.conf.cpu().numpy(),
+                                                  obb.xywhr.cpu().numpy(), obb.xyxyxyxy.cpu().numpy()):
+                ang, lo, sh = long_side_angle(corners)
+                blocks.append({'name': result.names[int(cls_id)], 'conf': round(float(conf), 3),
+                               'u': round(float(box[0]), 1), 'v': round(float(box[1]), 1),
+                               'angle_img': round(ang, 1), 'long_px': round(float(lo), 1),
+                               'short_px': round(float(sh), 1),
+                               'corners': [[round(float(a), 1), round(float(b), 1)] for a, b in corners]})
+        blocks.sort(key=lambda b: b['u'])
+        for i, b in enumerate(blocks):
+            b['id'] = i
 
-        lines = []
-        detections = []
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        out = String()
+        out.data = json.dumps({'stamp': stamp, 'frame': msg.header.frame_id, 'width': w, 'height': h,
+                               'blocks': blocks})
+        self.det_pub.publish(out)
 
-        camera_frame = self.latest_image.header.frame_id
-        try:
-            tf = self.tf_buffer.lookup_transform(self.target_frame, camera_frame, Time())
-
-        except TransformException as e:
-            self.get_logger().warning(f'no transform {camera_frame} -> {self.target_frame}: {e}')
-            return
-
-        
-
-
-        for cls_id, conf, box, corners in zip(obb.cls.cpu().numpy(),
-                                              obb.conf.cpu().numpy(),
-                                              obb.xywhr.cpu().numpy(),
-                                              obb.xyxyxyxy.cpu().numpy()):
-            cx, cy = box[0], box[1]
-            name = result.names[int(cls_id)]
-            d = self.depth_at(depth, cx, cy)
-            if d is None:
-                lines.append(f'{name} {conf:.2f} at ({cx:.0f}, {cy:.0f}) px, no depth')
-                continue
-
-            # centre of the top face -> grasp point in the middle of the block
-            x, y, z_top = self.to_base(cx, cy, d, tf, camera_frame)
-            z_grasp = z_top - self.block_height / 2.0
-
-            # long edge of the box in the image
-            e1 = np.linalg.norm(corners[1] - corners[0])
-            e2 = np.linalg.norm(corners[2] - corners[1])
-            a, b = (corners[0], corners[1]) if e1 >= e2 else (corners[1], corners[2])
-
-            # both corners in base_link -> direction of the long side
-            ax, ay, _ = self.to_base(a[0], a[1], d, tf, camera_frame)
-            bx, by, _ = self.to_base(b[0], b[1], d, tf, camera_frame)
-            yaw = math.atan2(by - ay, bx - ax)
-            if yaw > math.pi / 2:
-                yaw -= math.pi
-            elif yaw <= -math.pi / 2:
-                yaw += math.pi
-            long_side = math.hypot(bx - ax, by - ay)
-
-        
-            detections.append({'name': name, 'conf': float(conf),
-                               'x': x, 'y': y, 'z': z_grasp, 'yaw': yaw})
-
-
-        self.get_logger().info(f'{len(detections)} blocks: '
-                               + ', '.join(f"{d['name']} {d['conf']:.2f}" for d in detections))
-
-        if self.target_color is None:
-            return
-
-        matches = [d for d in detections if d['name'] == self.target_color]
-        status = String()
-
-        if not matches:
-            status.data = 'not_found'
-            self.status_pub.publish(status)
-            self.clear_marker()
-            self.get_logger().info(f'target {self.target_color}: not found')
-            return
-
-        if len(matches) > 1:
-            status.data = 'multiple'
-            self.get_logger().warning(
-                f'{len(matches)} {self.target_color} blocks found, using the most confident one')
-        else:
-            status.data = 'found'
-
-        best = max(matches, key=lambda d: d['conf'])
-        self.publish_target(best)
-        self.status_pub.publish(status)
-        self.get_logger().info(
-            f"target {best['name']} ({status.data}): grasp ({best['x']:+.3f}, {best['y']:+.3f}, "
-            f"{best['z']:+.4f}) m, yaw {math.degrees(best['yaw']):+.0f} deg")
-
+        # ---- drawing
+        view = image.copy()
+        for b in blocks:
+            col = DRAW_BGR.get(b['name'], (255, 0, 255))
+            pts = np.array(b['corners'], np.int32)
+            cv2.polylines(view, [pts], True, (0, 0, 0), 4)
+            cv2.polylines(view, [pts], True, col, 2)
+            c = (int(round(b['u'])), int(round(b['v'])))
+            cv2.circle(view, c, 3, (0, 0, 255), -1)
+            a = math.radians(b['angle_img'])
+            tip = (int(c[0] + 25 * math.cos(a)), int(c[1] + 25 * math.sin(a)))
+            cv2.line(view, c, tip, (0, 0, 255), 1)                       # long-side direction
+            x0, y0 = int(pts[:, 0].max()) + 6, int(pts[:, 1].min()) + 4
+            for k, t in enumerate([f"#{b['id']} {b['name']} {b['conf']:.2f}",
+                                   f"px {b['u']:.1f}, {b['v']:.1f}",
+                                   f"angle {b['angle_img']:+.1f} deg"]):
+                cv2.putText(view, t, (x0, y0 + 16 * k), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3)
+                cv2.putText(view, t, (x0, y0 + 16 * k), cv2.FONT_HERSHEY_SIMPLEX, 0.5, col, 1)
+        cv2.putText(view, f'{len(blocks)} blocks   s = snapshot, p = pause', (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        self.last_view = view
+        dbg = self.bridge.cv2_to_imgmsg(view, encoding='bgr8')
+        dbg.header = msg.header
+        self.debug_pub.publish(dbg)
+        self.get_logger().info(f'{len(blocks)} blocks: ' + ', '.join(
+            f"#{b['id']} {b['name']} {b['conf']:.2f} ({b['u']:.0f},{b['v']:.0f}) {b['angle_img']:+.0f}deg"
+            for b in blocks), throttle_duration_sec=2.0)
 
 
 def main():
     rclpy.init()
     node = DetectorNode()
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    cv2.destroyAllWindows()
     node.destroy_node()
     rclpy.shutdown()
 
+
+if __name__ == '__main__':
+    main()

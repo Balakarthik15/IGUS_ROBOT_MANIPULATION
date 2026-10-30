@@ -1,0 +1,194 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <world name="rebel_lab_world">
+
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.3 0.3 0.3 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.7 0.7 0.7 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="lab_table">
+      <static>true</static>
+      <pose>0 0 0.375 0 0 0</pose>
+      <link name="table_top">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1.2 0.8 0.75</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>1.2 0.8 0.75</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.9 0.9 0.85 1</ambient>
+            <diffuse>0.9 0.9 0.85 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="robot_base_plate">
+      <static>true</static>
+      <pose>0 0 0.775 0 0 0</pose>
+      <link name="plate_link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.7 0.4 0.05</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.7 0.4 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.5 0.5 0.5 1</ambient>
+            <diffuse>0.6 0.6 0.6 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- The overhead camera and its depth sensor are defined in the robot URDF, on the camera mount link. -->
+    <!-- This world only needs the Sensors system plugin above so those sensors can render. -->
+
+    <!-- Pick blocks, Duplo size 2x4 (63.8 x 31.8 x 19 mm) with studs.            -->
+    <!-- Models come from make_blocks.py, the model origin is the bottom centre, -->
+    <!-- so z = 0.75 puts them on the table top. Same spots as the old blocks.    -->
+    <include>
+      <name>block_red</name>
+      <uri>model://block_2x4_red</uri>
+      <pose>0.45 -0.15 0.75 0 0 0</pose>
+    </include>
+    <include>
+      <name>block_green</name>
+      <uri>model://block_2x4_green</uri>
+      <pose>0.45 -0.05 0.75 0 0 0</pose>
+    </include>
+    <include>
+      <name>block_yellow</name>
+      <uri>model://block_2x4_yellow</uri>
+      <pose>0.45 0.05 0.75 0 0 0</pose>
+    </include>
+    <include>
+      <name>block_blue</name>
+      <uri>model://block_2x4_blue</uri>
+      <pose>0.45 0.15 0.75 0 0 0</pose>
+    </include>
+
+    <!-- Distractor blocks, parked on the floor far from the table (out of camera view).  -->
+    <!-- The sim data generator moves them onto the table by name when a scene needs them. -->
+    <!-- Names are distractor_<type>_<colour>, for example distractor_2x2_red.            -->
+    <include>
+      <name>distractor_2x4_nostud_red</name>
+      <uri>model://block_2x4_nostud_red</uri>
+      <pose>3.00 -0.45 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x4_nostud_green</name>
+      <uri>model://block_2x4_nostud_green</uri>
+      <pose>3.00 -0.15 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x4_nostud_yellow</name>
+      <uri>model://block_2x4_nostud_yellow</uri>
+      <pose>3.00 0.15 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x4_nostud_blue</name>
+      <uri>model://block_2x4_nostud_blue</uri>
+      <pose>3.00 0.45 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x2_red</name>
+      <uri>model://block_2x2_red</uri>
+      <pose>3.30 -0.45 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x2_green</name>
+      <uri>model://block_2x2_green</uri>
+      <pose>3.30 -0.15 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x2_yellow</name>
+      <uri>model://block_2x2_yellow</uri>
+      <pose>3.30 0.15 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x2_blue</name>
+      <uri>model://block_2x2_blue</uri>
+      <pose>3.30 0.45 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x6_red</name>
+      <uri>model://block_2x6_red</uri>
+      <pose>3.60 -0.45 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x6_green</name>
+      <uri>model://block_2x6_green</uri>
+      <pose>3.60 -0.15 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x6_yellow</name>
+      <uri>model://block_2x6_yellow</uri>
+      <pose>3.60 0.15 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>distractor_2x6_blue</name>
+      <uri>model://block_2x6_blue</uri>
+      <pose>3.60 0.45 0 0 0 0</pose>
+    </include>
+
+  </world>
+</sdf>

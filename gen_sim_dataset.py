@@ -1,28 +1,37 @@
 #!/usr/bin/env python3
-"""Sim dataset generator for YOLO OBB block detection (igus ReBeL thesis setup).
+"""Sim dataset generator for YOLO OBB block detection (igus ReBeL thesis setup, lab table v2).
 
-Every scene has exactly 4 blocks in the pick area:
-    k main blocks (studded 2x4, one per colour, k = 1..4)
-  + 4-k distractors (2x4 without studs, 2x2 or 2x6, any colour)
-Only the main blocks get a label line. Distractors stay unlabelled, so YOLO
-learns to treat them as background.
+Classes (5 main 2x4 studded blocks):  0 red, 1 green, 2 yellow, 3 white, 4 lightblue
 
-Classes:  0 red, 1 blue, 2 yellow, 3 green
+Scenes follow the real lab images: at most 5 blocks on the board, all studs up,
+block centres at least 140 mm apart (room for the open gripper), random yaw.
+Distractors come from blocks_manifest.json (2x2, 2x6, 4x4, lime, blue, orange,
+step pieces, blocks without studs, similar shades ...). Only the main blocks get a
+label line. Distractors stay unlabelled, so YOLO learns to treat them as background.
+
+Scene types (shares are parameters):
+  many         50 %  3..5 main blocks, distractors up to 5 blocks in total
+  few          30 %  1..2 main blocks, distractors up to 5 blocks in total
+  distractors  10 %  1..5 distractors only, empty label file
+  lab           5 %  all 5 main blocks on the lab dice spots, colours shuffled
+  empty         5 %  empty board, empty label file
 
 How it works per scene:
-  1. pick the blocks, sample non-overlapping poses inside the pick area that
+  1. pick the blocks, sample non-overlapping poses on the cardboard that
      the camera can fully see
   2. move them with ONE gz set_pose_vector call (unused blocks go to parking)
   3. optionally randomize the sun light
-  4. wait until the blocks settle, take the next camera image
+  4. wait until the camera shows the new scene, let it settle, save the image
   5. project the top corners of each main block into the image -> OBB label
 
 Run (sim running, arm in a pose that does not cover the pick area):
-  python3 gen_sim_dataset.py --ros-args -p use_sim_time:=true -p num_scenes:=1500 -p out_dir:=$HOME/yolo_blocks
+  python3 gen_sim_dataset.py --ros-args -p use_sim_time:=true -p num_scenes:=1500 \
+      -p out_dir:=$HOME/yolo_blocks_v2 -p manifest:=<your package>/models/blocks_manifest.json
 
 Offline geometry check (no ROS needed):
-  python3 gen_sim_dataset.py --selftest
+  python3 gen_sim_dataset.py --selftest [path/to/blocks_manifest.json]
 """
+import json
 import math
 import os
 import random
@@ -33,57 +42,84 @@ import numpy as np
 
 # ------------------------------------------------------------------ setup --
 WORLD_NAME = "rebel_lab_world"
-SPAWN_XYZ = (0.0, 0.0, 0.80)          # create node: robot spawned at z = 0.80
-TABLE_TOP_WORLD_Z = 0.75               # lab_table top in the Gazebo world
-TABLE_TOP_Z = TABLE_TOP_WORLD_Z - SPAWN_XYZ[2]   # in base_link = -0.05
+SPAWN_XYZ = (0.0, 0.0, 0.79)            # create node: robot spawned at z = 0.79 (on the 40 mm plate)
+SURFACE_WORLD_Z = 0.753                 # top of the cardboard in the Gazebo world (table 0.75 + 3 mm)
+SURFACE_Z = SURFACE_WORLD_Z - SPAWN_XYZ[2]   # in base_link = -0.037
 
-# Pick area in base_link (metres): the lab table strip next to the robot
-# base plate, where the 4 main blocks stand in the world file.
-# Table x -0.6..0.6, plate x -0.35..0.35, so the strip is x 0.35..0.6.
-# Positions the camera cannot fully see are rejected automatically.
-PICK_X = (0.36, 0.59)
-PICK_Y = (-0.39, 0.39)
+# Pick area on the board, in base_link (metres). Block footprints stay inside it.
+# x from the robot plate edge (170 mm) to 25 mm before the table edge.
+# y covers where the blocks stand in the lab camera images.
+PICK_X = (0.170, 0.545)
+PICK_Y = (-0.125, 0.200)
+MAX_BLOCKS = 5                          # never more than 5 blocks on the board
+MIN_CENTER_DIST = 0.140                 # gripper needs 140 mm between block centres
+EDGE_MARGIN = 0.005                     # keep blocks this far inside the cardboard edge (m)
 MIN_GAP = 0.008                         # free space between blocks (m)
 IMG_MARGIN_PX = 8                       # block must be this far inside the image
 
-# Block geometry (must match make_blocks.py)
-PITCH = 0.01595
-BODY_H = 0.019
-WIDTH = 2 * PITCH
-LENGTH = {"2x4": 4 * PITCH, "2x4_nostud": 4 * PITCH, "2x2": 2 * PITCH, "2x6": 6 * PITCH}
+# Lab dice spots (centre x, y in base_link), long side along y, as in the world file.
+# Columns measured in the lab, rows and middle spot taken from the lab camera images.
+# In lab scenes the 5 colours are shuffled over these spots.
+LAB_SPOTS = [(0.444, -0.087), (0.271, -0.087), (0.367, 0.042), (0.444, 0.151), (0.271, 0.151)]
+LAB_YAW = math.pi / 2
+LAB_JITTER_XY = 0.006                   # +- shift around the lab spot (m)
+LAB_JITTER_YAW = math.radians(6)        # +- turn around the lab yaw
 
-CLASSES = ["red", "blue", "yellow", "green"]          # class id = index
-COLORS = CLASSES
-DISTRACTOR_TYPES = ["2x4_nostud", "2x2", "2x6"]
-SAME_COLOUR_PROB = 0.5    # chance a distractor copies the colour of a main block in the scene
-
-# Gazebo entity names from rebel_world.sdf
-def main_name(color):
-    return f"block_{color}"
-
-def distractor_name(dtype, color):
-    return f"distractor_{dtype}_{color}"
-
-# Parking spots (world frame), far from the table and out of camera view
-def parking_pose(name):
-    all_names = [main_name(c) for c in COLORS] + \
-                [distractor_name(t, c) for t in DISTRACTOR_TYPES for c in COLORS]
-    i = all_names.index(name)
-    return (3.0 + 0.3 * (i // 4), -0.45 + 0.3 * (i % 4), 0.0, 0.0)
+BODY_H = 0.019                          # body height without studs, the labelled top face
+CLASSES = ["red", "green", "yellow", "white", "lightblue"]   # class id = index
+SAME_COLOUR_PROB = 0.5    # chance a distractor has the colour of a main block in the scene
+SCENE_TYPES = ["many", "few", "distractors", "lab", "empty"]
+SCENE_SHARES = [0.50, 0.30, 0.10, 0.05, 0.05]
 
 # Camera topics (sim bridge uses the real D455 names)
 IMAGE_TOPIC = "/camera/camera/color/image_raw"
 INFO_TOPIC = "/camera/camera/color/camera_info"
 CAMERA_FRAME = "camera_color_optical_frame"
 BASE_FRAME = "base_link"
-SETTLE_S = 0.4            # sim seconds to wait after moving the blocks
+
+
+# ---------------------------------------------------------------- blocks --
+def entity_name(model, is_main, color):
+    """Gazebo entity name as used in rebel_world.sdf."""
+    if is_main:
+        return f"block_{color}"
+    return "d_" + model[len("block_"):]
+
+
+def load_manifest(path):
+    """Read blocks_manifest.json from make_blocks.py. Returns (mains, distractors), lists of dicts."""
+    with open(path) as f:
+        data = json.load(f)
+    mains, dists = [], []
+    for b in data["blocks"]:
+        if b["kind"] == "upside":          # only studs-up blocks are used
+            continue
+        blk = {"name": entity_name(b["model"], b["is_main"], b["color"]),
+               "model": b["model"], "kind": b["kind"], "color": b["color"],
+               "is_main": b["is_main"], "in_lab": b["in_lab"],
+               "length": b["length"], "width": b["width"], "height": b["height"]}
+        (mains if b["is_main"] else dists).append(blk)
+    found = sorted(m["color"] for m in mains)
+    if found != sorted(CLASSES):
+        raise SystemExit(f"manifest main colours {found} do not match CLASSES {CLASSES}")
+    mains.sort(key=lambda m: CLASSES.index(m["color"]))
+    return mains, dists
+
+
+def all_entities(mains, dists):
+    return [b["name"] for b in mains + dists]
+
+
+def parking_pose(i):
+    """Parking spot number i (world frame), far from the table and out of camera view."""
+    return (3.0 + 0.3 * (i // 6), -0.75 + 0.25 * (i % 6), 0.0, 0.0)
 
 
 # --------------------------------------------------------------- geometry --
-def block_corners(x, y, yaw, length, z):
-    """4 corners (base frame) of the block's top face, counter-clockwise."""
+def block_corners(x, y, yaw, length, width, z):
+    """4 corners (base frame) of a block rectangle at height z, counter-clockwise."""
     c, s = math.cos(yaw), math.sin(yaw)
-    hl, hw = length / 2.0, WIDTH / 2.0
+    hl, hw = length / 2.0, width / 2.0
     pts = []
     for dx, dy in ((hl, hw), (-hl, hw), (-hl, -hw), (hl, -hw)):
         pts.append((x + c * dx - s * dy, y + s * dx + c * dy, z))
@@ -119,54 +155,86 @@ def quat_to_R(x, y, z, w):
         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
 
 
+def top_face(blk, pose):
+    x, y, yaw = pose
+    return block_corners(x, y, yaw, blk["length"], blk["width"], SURFACE_Z + min(BODY_H, blk["height"]))
+
+
 # ---------------------------------------------------------- scene sampling --
-def sample_blocks(rng):
-    """Choose which 4 blocks are in the scene. Returns list of (name, type, colour, is_main)."""
-    k = rng.randint(1, 4)
-    mains = rng.sample(COLORS, k)
-    blocks = [(main_name(c), "2x4", c, True) for c in mains]
-    used = set()
-    while len(blocks) < 4:
-        dtype = rng.choice(DISTRACTOR_TYPES)
-        if rng.random() < SAME_COLOUR_PROB:
-            color = rng.choice(mains)
-        else:
-            color = rng.choice(COLORS)
-        if (dtype, color) in used:
-            continue
-        used.add((dtype, color))
-        blocks.append((distractor_name(dtype, color), dtype, color, False))
-    return blocks
+def pick_scene_type(rng, shares):
+    return rng.choices(SCENE_TYPES, weights=shares)[0]
 
 
-def sample_poses(rng, blocks, R, t, K, width, height, tries=400):
-    """Random non-overlapping, fully visible poses. Returns list of (x, y, yaw) or None."""
+def sample_blocks(rng, scene, mains, dists):
+    """Choose the blocks of one scene. Returns a list of block dicts, mains first."""
+    if scene == "empty":
+        return []
+    if scene == "lab":
+        return list(mains)
+    if scene == "distractors":
+        k, n_d = 0, rng.randint(1, MAX_BLOCKS)
+    else:
+        k = rng.randint(3, 5) if scene == "many" else rng.randint(1, 2)
+        n_d = rng.randint(0, MAX_BLOCKS - k)
+    chosen = rng.sample(mains, k)
+    scene_colours = {m["color"] for m in chosen}
+    same = [d for d in dists if d["color"] in scene_colours]
+    picked = []
+    while len(picked) < n_d:
+        pool = same if (same and rng.random() < SAME_COLOUR_PROB) else dists
+        d = rng.choice(pool)
+        if d not in picked:
+            picked.append(d)
+    return chosen + picked
+
+
+def pose_ok(blk, pose, placed, rects, min_dist, R, t, K, width, height):
+    """Footprint inside the pick area, far enough from the other blocks, top face fully
+    in the image. Returns the footprint or None."""
+    top = top_face(blk, pose)
+    foot = top[:, :2]
+    m = EDGE_MARGIN
+    if foot[:, 0].min() < PICK_X[0] + m or foot[:, 0].max() > PICK_X[1] - m:
+        return None
+    if foot[:, 1].min() < PICK_Y[0] + m or foot[:, 1].max() > PICK_Y[1] - m:
+        return None
+    if any(math.hypot(pose[0] - q[0], pose[1] - q[1]) < min_dist for q in placed):
+        return None
+    if any(rects_overlap(foot, r, MIN_GAP) for r in rects):
+        return None
+    uv, z = project(top, R, t, K)
+    if (z <= 0).any():
+        return None
+    pm = IMG_MARGIN_PX
+    if uv[:, 0].min() < pm or uv[:, 0].max() > width - pm or \
+       uv[:, 1].min() < pm or uv[:, 1].max() > height - pm:
+        return None
+    return foot
+
+
+def sample_poses(rng, blocks, scene, R, t, K, width, height, min_dist=MIN_CENTER_DIST, tries=300):
+    """Poses (x, y, yaw) for all blocks, or None if they do not fit."""
+    if scene == "lab":
+        spots = rng.sample(LAB_SPOTS, len(blocks))     # shuffle colours over the spots
     for _ in range(tries):
         placed, rects = [], []
         ok = True
-        for _name, btype, _c, _main in blocks:
-            L = LENGTH[btype]
+        for i, blk in enumerate(blocks):
             good = False
-            for _ in range(60):
-                x = rng.uniform(*PICK_X)
-                y = rng.uniform(*PICK_Y)
-                yaw = rng.uniform(0.0, math.pi)
-                top = block_corners(x, y, yaw, L, TABLE_TOP_Z + BODY_H)
-                foot = top[:, :2]
-                if foot[:, 0].min() < PICK_X[0] or foot[:, 0].max() > PICK_X[1]:
+            for _ in range(100):
+                if scene == "lab":
+                    sx, sy = spots[i]
+                    pose = (sx + rng.uniform(-LAB_JITTER_XY, LAB_JITTER_XY),
+                            sy + rng.uniform(-LAB_JITTER_XY, LAB_JITTER_XY),
+                            LAB_YAW + rng.uniform(-LAB_JITTER_YAW, LAB_JITTER_YAW))
+                    md = 0.0                                   # the lab spots are fixed
+                else:
+                    pose = (rng.uniform(*PICK_X), rng.uniform(*PICK_Y), rng.uniform(0.0, math.pi))
+                    md = min_dist
+                foot = pose_ok(blk, pose, placed, rects, md, R, t, K, width, height)
+                if foot is None:
                     continue
-                if foot[:, 1].min() < PICK_Y[0] or foot[:, 1].max() > PICK_Y[1]:
-                    continue
-                uv, z = project(top, R, t, K)
-                if (z <= 0).any():
-                    continue
-                m = IMG_MARGIN_PX
-                if uv[:, 0].min() < m or uv[:, 0].max() > width - m or \
-                   uv[:, 1].min() < m or uv[:, 1].max() > height - m:
-                    continue
-                if any(rects_overlap(foot, r, MIN_GAP) for r in rects):
-                    continue
-                placed.append((x, y, yaw))
+                placed.append(pose)
                 rects.append(foot)
                 good = True
                 break
@@ -180,15 +248,14 @@ def sample_poses(rng, blocks, R, t, K, width, height, tries=400):
 
 def label_lines(blocks, poses, R, t, K, width, height):
     lines = []
-    for (name, btype, color, is_main), (x, y, yaw) in zip(blocks, poses):
-        if not is_main:
+    for blk, pose in zip(blocks, poses):
+        if not blk["is_main"]:
             continue
-        top = block_corners(x, y, yaw, LENGTH[btype], TABLE_TOP_Z + BODY_H)
-        uv, _ = project(top, R, t, K)
+        uv, _ = project(top_face(blk, pose), R, t, K)
         coords = []
         for u, v in uv:
             coords += [min(max(u / width, 0.0), 1.0), min(max(v / height, 0.0), 1.0)]
-        lines.append(f"{CLASSES.index(color)} " + " ".join(f"{c:.6f}" for c in coords))
+        lines.append(f"{CLASSES.index(blk['color'])} " + " ".join(f"{c:.6f}" for c in coords))
     return lines
 
 
@@ -207,7 +274,7 @@ def gz_service(service, reqtype, req, timeout_ms=5000, attempts=3):
     import time
     cmd = ["gz", "service", "-s", service, "--reqtype", reqtype,
            "--reptype", "gz.msgs.Boolean", "--timeout", str(timeout_ms), "--req", req]
-    for i in range(attempts):
+    for _ in range(attempts):
         r = subprocess.run(cmd, capture_output=True, text=True)
         LAST_GZ_OUTPUT = (r.stdout + r.stderr).strip()
         if r.returncode == 0 and "data: true" in r.stdout:
@@ -216,19 +283,17 @@ def gz_service(service, reqtype, req, timeout_ms=5000, attempts=3):
     return False
 
 
-def move_blocks(blocks, poses):
-    """Put scene blocks on the table, park all others. One set_pose_vector call."""
-    on_table = {b[0]: p for b, p in zip(blocks, poses)}
-    all_names = [main_name(c) for c in COLORS] + \
-                [distractor_name(t, c) for t in DISTRACTOR_TYPES for c in COLORS]
+def move_blocks(blocks, poses, names):
+    """Put scene blocks on the cardboard, park all others. One set_pose_vector call."""
+    on_table = {b["name"]: p for b, p in zip(blocks, poses)}
     parts = []
-    for name in all_names:
+    for i, name in enumerate(names):
         if name in on_table:
             x, y, yaw = on_table[name]
-            wx, wy = x + SPAWN_XYZ[0], y + SPAWN_XYZ[1]
-            parts.append(pose_text(name, wx, wy, TABLE_TOP_WORLD_Z + 0.0005, yaw))
+            parts.append(pose_text(name, x + SPAWN_XYZ[0], y + SPAWN_XYZ[1],
+                                   SURFACE_WORLD_Z + 0.0005, yaw))
         else:
-            px, py, pz, pyaw = parking_pose(name)
+            px, py, pz, pyaw = parking_pose(i)
             parts.append(pose_text(name, px, py, pz, pyaw))
     return gz_service(f"/world/{WORLD_NAME}/set_pose_vector", "gz.msgs.Pose_V", " ".join(parts))
 
@@ -256,10 +321,9 @@ def scene_mask(blocks, poses, R, t, K, W, H):
     """Image mask covering the new block positions (top face and footprint)."""
     import cv2
     mask = np.zeros((H, W), np.uint8)
-    for (_n, btype, _c, _m), (x, y, yaw) in zip(blocks, poses):
-        L = LENGTH[btype]
-        pts = np.vstack([block_corners(x, y, yaw, L, TABLE_TOP_Z + BODY_H),
-                         block_corners(x, y, yaw, L, TABLE_TOP_Z)])
+    for blk, (x, y, yaw) in zip(blocks, poses):
+        pts = np.vstack([top_face(blk, (x, y, yaw)),
+                         block_corners(x, y, yaw, blk["length"], blk["width"], SURFACE_Z)])
         uv, _ = project(pts, R, t, K)
         hull = cv2.convexHull(uv.round().astype(np.int32))
         cv2.fillConvexPoly(mask, hull, 255)
@@ -268,7 +332,8 @@ def scene_mask(blocks, poses, R, t, K, W, H):
 
 def _gray(node, msg):
     import cv2
-    return cv2.cvtColor(node.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8"), cv2.COLOR_BGR2GRAY).astype(np.float32)
+    return cv2.cvtColor(node.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8"),
+                        cv2.COLOR_BGR2GRAY).astype(np.float32)
 
 
 def wait_frames(node, seconds):
@@ -281,7 +346,7 @@ def wait_frames(node, seconds):
     return _gray(node, node.latest)
 
 
-def wait_for_change(node, before, mask, log):
+def wait_for_change(node, before, mask):
     """Wait until the image at the new block spots differs from 'before', let it settle,
     and return the settled color image. None on timeout."""
     import time
@@ -307,13 +372,26 @@ def wait_for_change(node, before, mask, log):
     return None
 
 
+def draw_debug(img, blocks, poses, R, t, K):
+    import cv2
+    dbg = img.copy()
+    for blk, pose in zip(blocks, poses):
+        uv, _ = project(top_face(blk, pose), R, t, K)
+        pts = uv.round().astype(np.int32).reshape(-1, 1, 2)
+        col = (0, 255, 0) if blk["is_main"] else (255, 0, 255)
+        cv2.polylines(dbg, [pts], True, col, 2 if blk["is_main"] else 1)
+        txt = blk["color"] if blk["is_main"] else blk["name"]
+        cv2.putText(dbg, txt, tuple(pts[0, 0]), cv2.FONT_HERSHEY_SIMPLEX, 0.45, col, 1)
+    return dbg
+
+
 # ------------------------------------------------------------ ROS 2 node --
 def run_ros():
     import cv2
+    import glob
     import rclpy
     from rclpy.node import Node
     from rclpy.time import Time
-    from rclpy.duration import Duration
     from sensor_msgs.msg import Image, CameraInfo
     from cv_bridge import CvBridge
     import tf2_ros
@@ -322,11 +400,16 @@ def run_ros():
         def __init__(self):
             super().__init__("sim_dataset_generator")
             self.declare_parameter("num_scenes", 1500)
-            self.declare_parameter("out_dir", os.path.expanduser("~/yolo_blocks"))
+            self.declare_parameter("out_dir", os.path.expanduser("~/yolo_blocks_v2"))
+            self.declare_parameter("manifest", "blocks_manifest.json")
             self.declare_parameter("val_fraction", 0.2)
             self.declare_parameter("seed", 0)
             self.declare_parameter("randomize_light", True)
-            self.declare_parameter("debug_every", 10)
+            self.declare_parameter("debug_every", 1)          # 1 = debug image for every scene
+            # shares of the scene types many, few, distractors, lab, empty (normalised)
+            self.declare_parameter("scene_shares", SCENE_SHARES)
+            self.declare_parameter("min_center_dist", MIN_CENTER_DIST)
+            self.declare_parameter("lab_only_distractors", False)  # True = only blocks you also have in the lab
             self.bridge = CvBridge()
             self.latest = None
             self.K = None
@@ -345,12 +428,24 @@ def run_ros():
     rclpy.init(args=sys.argv)
     node = Generator()
     p = lambda n: node.get_parameter(n).value
+    log = node.get_logger()
+
+    manifest = os.path.expanduser(p("manifest"))
+    if not os.path.isfile(manifest):
+        log.error(f"manifest not found: {manifest}. Pass -p manifest:=<package>/models/blocks_manifest.json")
+        rclpy.shutdown()
+        return
+    mains, dists = load_manifest(manifest)
+    names = all_entities(mains, dists)          # every block in the world, for moving and parking
+    if p("lab_only_distractors"):
+        dists = [d for d in dists if d["in_lab"]]
+    log.info(f"{len(mains)} main blocks, {len(dists)} distractors in use")
+
     rng = random.Random(p("seed"))
-    out = p("out_dir")
+    out = os.path.expanduser(p("out_dir"))
     for sub in ("images/train", "images/val", "labels/train", "labels/val", "debug"):
         os.makedirs(os.path.join(out, sub), exist_ok=True)
 
-    log = node.get_logger()
     if not node.get_parameter("use_sim_time").value:
         log.error("run with --ros-args -p use_sim_time:=true, the image stamps are sim time")
         rclpy.shutdown()
@@ -373,26 +468,37 @@ def run_ros():
     log.info(f"camera ready, image {W}x{H}, fx {K[0,0]:.1f}, camera {t.round(3)}")
 
     # make sure every block from the world file really exists in Gazebo
-    all_names = [main_name(c) for c in COLORS] + \
-                [distractor_name(dt, c) for dt in DISTRACTOR_TYPES for c in COLORS]
     r = subprocess.run(["gz", "model", "--list"], capture_output=True, text=True)
     if r.returncode == 0:
         present = {ln.strip().lstrip("-").strip() for ln in r.stdout.splitlines()}
-        missing = [n for n in all_names if n not in present]
+        missing = [n for n in names if n not in present]
         if missing:
             log.error(f"these blocks are not loaded in Gazebo: {missing}. "
                       "Check the Gazebo startup log for model:// errors and the models folder.")
             rclpy.shutdown()
             return
-        log.info("all 16 blocks found in Gazebo")
+        log.info(f"all {len(names)} blocks found in Gazebo")
     else:
         log.warning("could not run 'gz model --list', skipping the block check")
+
+    shares = [float(v) for v in p("scene_shares")]
+    if len(shares) != len(SCENE_TYPES):
+        log.error(f"scene_shares needs {len(SCENE_TYPES)} numbers for {SCENE_TYPES}")
+        rclpy.shutdown()
+        return
+    min_dist = p("min_center_dist")
+    # can the camera see the lab spots? (lab scenes are impossible otherwise)
+    hidden = [s for s in LAB_SPOTS if pose_ok(mains[0], (*s, LAB_YAW), [], [], 0.0, R, t, K, W, H) is None]
+    if hidden and shares[3] > 0:
+        log.warning(f"lab spots {hidden} are not fully visible in the camera, lab scenes switched off")
+        shares[3] = 0.0
+    log.info("scene shares " + ", ".join(f"{n} {v:.2f}" for n, v in zip(SCENE_TYPES, shares)))
+    prev_blocks, prev_poses = [], []       # last scene, its spots must change in the image too
 
     light_ok = p("randomize_light")
     n_total, n_done, n_fail, n_retry = p("num_scenes"), 0, 0, 0
 
     # continue an earlier run in the same out_dir: count the scenes already saved
-    import glob
     existing = glob.glob(os.path.join(out, "images", "*", "scene_*.jpg"))
     if existing:
         n_done = max(int(os.path.basename(f)[6:11]) for f in existing) + 1
@@ -404,14 +510,16 @@ def run_ros():
             f.write(f"  {i}: {c}\n")
 
     while rclpy.ok() and n_done < n_total:
-        blocks = sample_blocks(rng)
-        poses = sample_poses(rng, blocks, R, t, K, W, H)
+        scene = pick_scene_type(rng, shares)
+        blocks = sample_blocks(rng, scene, mains, dists)
+        poses = sample_poses(rng, blocks, scene, R, t, K, W, H, min_dist)
         if poses is None:
             n_fail += 1
             if n_fail > 50:
                 log.error("cannot place blocks, pick area too small or not visible")
                 break
             continue
+        n_fail = 0
         # 1. change the light first and let it show up, so the "before" image already has it
         if light_ok and not randomize_light(rng):
             log.warning("light_config failed, light randomization switched off")
@@ -419,16 +527,20 @@ def run_ros():
         before = wait_frames(node, LIGHT_WAIT_S)
 
         # 2. move the blocks
-        if not move_blocks(blocks, poses):
+        if not move_blocks(blocks, poses, names):
             log.error(f"set_pose_vector failed 3 times. Gazebo answered: '{LAST_GZ_OUTPUT[:300]}'. "
                       f"Check that the sim is still running and the world is '{WORLD_NAME}'. "
                       "Start the script again with the same out_dir to continue.")
             break
 
-        # 3. wait until the camera really shows the new scene (pixels at the new block
-        #    spots changed), then wait a bit more for the blocks to settle
-        mask = scene_mask(blocks, poses, R, t, K, W, H)
-        img = wait_for_change(node, before, mask, log)
+        # 3. wait until the camera really shows the new scene (pixels at the old and the
+        #    new block spots changed), then let the blocks settle
+        mask = scene_mask(prev_blocks + blocks, prev_poses + poses, R, t, K, W, H)
+        if mask.any():
+            img = wait_for_change(node, before, mask)
+        else:                                  # empty board after an empty board: nothing to see change
+            wait_frames(node, SETTLE_AFTER_CHANGE_S + 0.5)
+            img = node.bridge.imgmsg_to_cv2(node.latest, desired_encoding="bgr8")
         if img is None:
             n_retry += 1
             log.warning(f"new scene did not appear in the camera within {CHANGE_TIMEOUT_S} s, retrying")
@@ -437,25 +549,18 @@ def run_ros():
                 break
             continue
         n_retry = 0
+        prev_blocks, prev_poses = blocks, poses
         split = "val" if rng.random() < p("val_fraction") else "train"
         stem = f"scene_{n_done:05d}"
         cv2.imwrite(os.path.join(out, "images", split, stem + ".jpg"), img,
                     [cv2.IMWRITE_JPEG_QUALITY, 95])
         lines = label_lines(blocks, poses, R, t, K, W, H)
         with open(os.path.join(out, "labels", split, stem + ".txt"), "w") as f:
-            f.write("\n".join(lines) + "\n")
+            f.write("".join(ln + "\n" for ln in lines))      # empty file = no main block
 
         if p("debug_every") > 0 and n_done % p("debug_every") == 0:
-            dbg = img.copy()
-            for (name, btype, color, is_main), (x, y, yaw) in zip(blocks, poses):
-                top = block_corners(x, y, yaw, LENGTH[btype], TABLE_TOP_Z + BODY_H)
-                uv, _ = project(top, R, t, K)
-                pts = uv.round().astype(np.int32).reshape(-1, 1, 2)
-                col = (0, 255, 0) if is_main else (255, 0, 255)
-                cv2.polylines(dbg, [pts], True, col, 2 if is_main else 1)
-                txt = color if is_main else f"d {btype} {color}"
-                cv2.putText(dbg, txt, tuple(pts[0, 0]), cv2.FONT_HERSHEY_SIMPLEX, 0.45, col, 1)
-            cv2.imwrite(os.path.join(out, "debug", stem + ".jpg"), dbg, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            cv2.imwrite(os.path.join(out, "debug", stem + ".jpg"),
+                        draw_debug(img, blocks, poses, R, t, K), [cv2.IMWRITE_JPEG_QUALITY, 80])
 
         n_done += 1
         if n_done % 50 == 0:
@@ -470,10 +575,11 @@ def run_ros():
 def camera_from_urdf():
     """Camera pose base->optical and K computed from the URDF + sim sensor, for the self test."""
     def rpy(r, p, y):
-        cr, sr, cp, sp, cy, sy = map(lambda a: a, (math.cos(r), math.sin(r), math.cos(p), math.sin(p), math.cos(y), math.sin(y)))
+        cr, sr, cp, sp, cy, sy = math.cos(r), math.sin(r), math.cos(p), math.sin(p), math.cos(y), math.sin(y)
         return np.array([[cy*cp, cy*sp*sr - sy*cr, cy*sp*cr + sy*sr],
                          [sy*cp, sy*sp*sr + cy*cr, sy*sp*cr - cy*sr],
                          [-sp, cp*sr, cp*cr]])
+
     def T(xyz, r):
         M = np.eye(4); M[:3, :3] = r; M[:3, 3] = xyz; return M
     chain = T((0.31, -0.65, 0.3725), np.eye(3)) @ T((0, 0.435, 0.3975), rpy(0, 0, -1.5708)) \
@@ -485,56 +591,67 @@ def camera_from_urdf():
     return inv[:3, :3], inv[:3, 3], K, W, H
 
 
-def selftest():
+def selftest(manifest_path):
+    mains, dists = load_manifest(manifest_path)
+    print(f"manifest: {len(mains)} main, {len(dists)} distractors "
+          f"({sum(d['in_lab'] for d in dists)} also in the lab)")
     R, t, K, W, H = camera_from_urdf()
     cam = -R.T @ t
-    print(f"camera in base_link: {cam.round(3)}, height above table {cam[2]-TABLE_TOP_Z:.3f} m, fx {K[0,0]:.1f}")
-    # visible part of the pick strip
-    xs = np.linspace(*PICK_X, 47); ys = np.linspace(*PICK_Y, 157)
-    vis = np.zeros((len(ys), len(xs)), bool)
-    for j, y in enumerate(ys):
-        for i, x in enumerate(xs):
-            uv, z = project(np.array([[x, y, TABLE_TOP_Z + BODY_H]]), R, t, K)
-            vis[j, i] = z[0] > 0 and 0 <= uv[0, 0] <= W and 0 <= uv[0, 1] <= H
-    rows = np.where(vis.all(axis=1))[0]
-    print(f"pick strip x {PICK_X}, y {PICK_Y}")
-    print(f"fully visible y range: {ys[rows[0]]:.3f} .. {ys[rows[-1]]:.3f}" if len(rows) else "pick strip NOT visible")
-    # pixel size at table
-    a, _ = project(np.array([[0.45, 0.1, TABLE_TOP_Z + BODY_H], [0.4819, 0.1, TABLE_TOP_Z + BODY_H]]), R, t, K)
-    print(f"block width 31.8 mm is about {np.linalg.norm(a[0]-a[1]):.1f} px, one stud (9.4 mm) about {np.linalg.norm(a[0]-a[1])*9.4/31.8:.1f} px")
-    # sampling
+    print(f"camera in base_link: {cam.round(3)}, height above cardboard {cam[2]-SURFACE_Z:.3f} m, fx {K[0,0]:.1f}")
+    corners = np.array([[x, y, SURFACE_Z] for x in PICK_X for y in PICK_Y])
+    uv, _ = project(corners, R, t, K)
+    print("cardboard corners in the image (px):", [tuple(c) for c in uv.round().astype(int)])
+    xs = np.linspace(*PICK_X, 60); ys = np.linspace(*PICK_Y, 50)
+    vis = sum(1 for x in xs for y in ys
+              if (lambda a: 0 <= a[0][0, 0] <= W and 0 <= a[0][0, 1] <= H and a[1][0] > 0)(
+                  project(np.array([[x, y, SURFACE_Z + BODY_H]]), R, t, K)))
+    print(f"visible share of the cardboard: {100 * vis / (len(xs) * len(ys)):.0f} %")
+    hidden = [s for s in LAB_SPOTS if pose_ok(mains[0], (*s, LAB_YAW), [], [], 0.0, R, t, K, W, H) is None]
+    print("lab spots fully visible:", "all" if not hidden else f"NOT {hidden}")
+    a, _ = project(np.array([[0.35, 0.05, SURFACE_Z + BODY_H], [0.3819, 0.05, SURFACE_Z + BODY_H]]), R, t, K)
+    print(f"block width 31.9 mm is about {np.linalg.norm(a[0]-a[1]):.1f} px")
+
     rng = random.Random(1)
-    ok, k_hist, same = 0, [0]*5, 0
-    examples = []
-    for _ in range(300):
-        blocks = sample_blocks(rng)
-        assert len(blocks) == 4 and len({b[0] for b in blocks}) == 4
-        poses = sample_poses(rng, blocks, R, t, K, W, H)
+    N = 2000
+    count = {n: 0 for n in SCENE_TYPES}
+    fails, k_hist, n_hist, dmin, examples = 0, [0] * 6, [0] * 6, 9.0, {}
+    for _ in range(N):
+        scene = pick_scene_type(rng, SCENE_SHARES)
+        blocks = sample_blocks(rng, scene, mains, dists)
+        assert len({b["name"] for b in blocks}) == len(blocks) <= MAX_BLOCKS
+        assert all(b["kind"] != "upside" for b in blocks)
+        poses = sample_poses(rng, blocks, scene, R, t, K, W, H)
         if poses is None:
+            fails += 1
             continue
-        ok += 1
-        mains = [b for b in blocks if b[3]]
-        k_hist[len(mains)] += 1
-        if any((not b[3]) and b[2] in {m[2] for m in mains} for b in blocks):
-            same += 1
+        count[scene] += 1
+        k = sum(b["is_main"] for b in blocks)
+        k_hist[k] += 1
+        n_hist[len(blocks)] += 1
+        if scene != "lab":
+            for i in range(len(poses)):
+                for j in range(i):
+                    dmin = min(dmin, math.hypot(poses[i][0] - poses[j][0], poses[i][1] - poses[j][1]))
         lines = label_lines(blocks, poses, R, t, K, W, H)
-        assert len(lines) == len(mains)
+        assert len(lines) == k
         for ln in lines:
             v = ln.split(); assert len(v) == 9 and all(0 <= float(c) <= 1 for c in v[1:])
-        if len(examples) < 1:
-            examples.append((blocks, poses, lines))
-    print(f"scenes placed: {ok}/300, main-block count 1..4: {k_hist[1:]}, scenes with a same-colour distractor: {same}")
-    blocks, poses, lines = examples[0]
-    print("example scene:")
-    for b, pz in zip(blocks, poses):
-        print(f"  {b[0]:28s} main={b[3]!s:5s} x={pz[0]:.3f} y={pz[1]:.3f} yaw={math.degrees(pz[2]):.0f}")
-    print("  labels:"); [print("   ", l) for l in lines]
-    print("  set_pose_vector request starts with:", pose_text(blocks[0][0], 0.4, 0.1, 0.75, 0.3)[:90], "...")
-    return R, t, K, W, H, examples
+        examples.setdefault(scene, (blocks, poses, lines))
+    print(f"{N} scenes tried, {fails} did not fit (they are simply sampled again)")
+    print("scene types:", ", ".join(f"{n} {100 * c / (N - fails):.0f} %" for n, c in count.items()))
+    print(f"main blocks per scene 0..5: {k_hist}")
+    print(f"blocks on the board 0..5:   {n_hist}")
+    print(f"smallest centre distance in random scenes: {dmin * 1000:.0f} mm")
+    for scene, (blocks, poses, lines) in examples.items():
+        print(f"example {scene}:")
+        for b, pz in zip(blocks, poses):
+            print(f"  {b['name']:24s} main={b['is_main']!s:5s} x={pz[0]:.3f} y={pz[1]:.3f} yaw={math.degrees(pz[2]):.0f}")
+    return R, t, K, W, H, mains, dists, examples
 
 
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
-        selftest()
+        rest = [a for a in sys.argv[1:] if a != "--selftest"]
+        selftest(rest[0] if rest else "blocks_manifest.json")
     else:
         run_ros()

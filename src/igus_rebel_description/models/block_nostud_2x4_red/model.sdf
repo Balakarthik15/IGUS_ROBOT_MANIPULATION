@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <model name="block_nostud_2x4_red">
+    <link name="link">
+      <inertial>
+        <pose>0 0 0.00950 0 0 0</pose>
+        <mass>0.01200</mass>
+        <inertia><ixx>1.3786e-06</ixx><iyy>4.4314e-06</iyy><izz>5.0881e-06</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+      </inertial>
+        <visual name="body_v"><pose>0.00000 0.00000 0.00950 0 0 0</pose><geometry><box><size>0.06380 0.03190 0.01900</size></box></geometry><material><ambient>0.820 0.020 0.130 1</ambient><diffuse>0.820 0.020 0.130 1</diffuse><specular>0.25 0.25 0.25 1</specular></material></visual><collision name="body_c"><pose>0.00000 0.00000 0.00950 0 0 0</pose><geometry><box><size>0.06380 0.03190 0.01900</size></box></geometry><surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface></collision>
+    </link>
+  </model>
+</sdf>

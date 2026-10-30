@@ -2,5 +2,9 @@
 **/install/*
 **/log/*
 **/YOLO_Detection/*
+**/yolo_real/**
+**/hand_eye_calib/**
+**/_pycache_/**
+
 
 **/.vscode/*

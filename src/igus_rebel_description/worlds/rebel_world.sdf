@@ -49,146 +49,213 @@
       </link>
     </model>
 
+    <!-- Lab table 1200 x 800 mm, top at 0.75 m. Front edge 310 mm in front of base_link, left edge 400 mm beyond the robot plate -->
     <model name="lab_table">
       <static>true</static>
-      <pose>0 0 0.375 0 0 0</pose>
-      <link name="table_top">
+      <pose>-0.0300 -0.0900 0.3750 0 0 0</pose>
+      <link name="link">
         <collision name="collision">
-          <geometry>
-            <box>
-              <size>1.2 0.8 0.75</size>
-            </box>
-          </geometry>
+          <geometry><box><size>1.2000 0.8000 0.7500</size></box></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry>
-            <box>
-              <size>1.2 0.8 0.75</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>0.9 0.9 0.85 1</ambient>
-            <diffuse>0.9 0.9 0.85 1</diffuse>
-          </material>
+          <geometry><box><size>1.2000 0.8000 0.7500</size></box></geometry>
+          <material><ambient>0.59 0.62 0.6 1</ambient><diffuse>0.59 0.62 0.6 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
         </visual>
       </link>
     </model>
-
-    <model name="robot_base_plate">
+    <!-- Robot work plate 650 x 400 x 40 mm. base_link 170 mm from its cardboard-side edge, centred in its width, front edge 110 mm from the table front edge -->
+    <model name="robot_worktable">
       <static>true</static>
-      <pose>0 0 0.775 0 0 0</pose>
-      <link name="plate_link">
+      <pose>-0.1550 0.0000 0.7700 0 0 0</pose>
+      <link name="link">
         <collision name="collision">
-          <geometry>
-            <box>
-              <size>0.7 0.4 0.05</size>
-            </box>
-          </geometry>
+          <geometry><box><size>0.6500 0.4000 0.0400</size></box></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <geometry>
-            <box>
-              <size>0.7 0.4 0.05</size>
-            </box>
-          </geometry>
-          <material>
-            <ambient>0.5 0.5 0.5 1</ambient>
-            <diffuse>0.6 0.6 0.6 1</diffuse>
-          </material>
+          <geometry><box><size>0.6500 0.4000 0.0400</size></box></geometry>
+          <material><ambient>0.62 0.47 0.33 1</ambient><diffuse>0.62 0.47 0.33 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
         </visual>
       </link>
     </model>
-
-    <!-- The overhead camera and its depth sensor are defined in the robot URDF, on the camera mount link. -->
-    <!-- This world only needs the Sensors system plugin above so those sensors can render. -->
-
-    <!-- Pick blocks, Duplo size 2x4 (63.8 x 31.8 x 19 mm) with studs.            -->
-    <!-- Models come from make_blocks.py, the model origin is the bottom centre, -->
-    <!-- so z = 0.75 puts them on the table top. Same spots as the old blocks.    -->
+    <!-- Brown board 375 x 800 x 3 mm over the full table depth, as in the lab camera images. Starts at the robot plate edge, ends 25 mm before the table left edge. Blocks are placed in the middle part only (pick area). -->
+    <model name="pick_area_cardboard">
+      <static>true</static>
+      <pose>0.3575 -0.0900 0.7515 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.3750 0.8000 0.0030</size></box></geometry>
+          <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3750 0.8000 0.0030</size></box></geometry>
+          <material><ambient>0.69 0.53 0.45 1</ambient><diffuse>0.69 0.53 0.45 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
+        </visual>
+      </link>
+    </model>
+    <!-- Main blocks (the 5 YOLO classes) in the lab dice pattern, spots taken from the lab camera images -->
     <include>
       <name>block_red</name>
       <uri>model://block_2x4_red</uri>
-      <pose>0.45 -0.15 0.75 0 0 0</pose>
+      <pose>0.444 -0.087 0.7530 0 0 1.5708</pose>
     </include>
     <include>
       <name>block_green</name>
       <uri>model://block_2x4_green</uri>
-      <pose>0.45 -0.05 0.75 0 0 0</pose>
+      <pose>0.271 -0.087 0.7530 0 0 1.5708</pose>
     </include>
     <include>
       <name>block_yellow</name>
       <uri>model://block_2x4_yellow</uri>
-      <pose>0.45 0.05 0.75 0 0 0</pose>
+      <pose>0.444 0.151 0.7530 0 0 1.5708</pose>
     </include>
     <include>
-      <name>block_blue</name>
-      <uri>model://block_2x4_blue</uri>
-      <pose>0.45 0.15 0.75 0 0 0</pose>
-    </include>
-
-    <!-- Distractor blocks, parked on the floor far from the table (out of camera view).  -->
-    <!-- The sim data generator moves them onto the table by name when a scene needs them. -->
-    <!-- Names are distractor_<type>_<colour>, for example distractor_2x2_red.            -->
-    <include>
-      <name>distractor_2x4_nostud_red</name>
-      <uri>model://block_2x4_nostud_red</uri>
-      <pose>3.00 -0.45 0 0 0 0</pose>
+      <name>block_lightblue</name>
+      <uri>model://block_2x4_lightblue</uri>
+      <pose>0.271 0.151 0.7530 0 0 1.5708</pose>
     </include>
     <include>
-      <name>distractor_2x4_nostud_green</name>
-      <uri>model://block_2x4_nostud_green</uri>
-      <pose>3.00 -0.15 0 0 0 0</pose>
+      <name>block_white</name>
+      <uri>model://block_2x4_white</uri>
+      <pose>0.367 0.042 0.7530 0 0 1.5708</pose>
     </include>
+    <!-- Distractors, parked on the floor far from the table. The data generator moves them by name. -->
+    <!-- Name is d_ plus the model name without block_, for example d_2x2_red or d_nostud_2x4_white. -->
     <include>
-      <name>distractor_2x4_nostud_yellow</name>
-      <uri>model://block_2x4_nostud_yellow</uri>
-      <pose>3.00 0.15 0 0 0 0</pose>
-    </include>
-    <include>
-      <name>distractor_2x4_nostud_blue</name>
-      <uri>model://block_2x4_nostud_blue</uri>
-      <pose>3.00 0.45 0 0 0 0</pose>
-    </include>
-    <include>
-      <name>distractor_2x2_red</name>
+      <name>d_2x2_red</name>
       <uri>model://block_2x2_red</uri>
-      <pose>3.30 -0.45 0 0 0 0</pose>
+      <pose>3.00 -0.75 0 0 0 0</pose>
     </include>
     <include>
-      <name>distractor_2x2_green</name>
+      <name>d_2x2_green</name>
       <uri>model://block_2x2_green</uri>
-      <pose>3.30 -0.15 0 0 0 0</pose>
+      <pose>3.00 -0.50 0 0 0 0</pose>
     </include>
     <include>
-      <name>distractor_2x2_yellow</name>
+      <name>d_2x2_yellow</name>
       <uri>model://block_2x2_yellow</uri>
-      <pose>3.30 0.15 0 0 0 0</pose>
+      <pose>3.00 -0.25 0 0 0 0</pose>
     </include>
     <include>
-      <name>distractor_2x2_blue</name>
-      <uri>model://block_2x2_blue</uri>
-      <pose>3.30 0.45 0 0 0 0</pose>
+      <name>d_2x2_white</name>
+      <uri>model://block_2x2_white</uri>
+      <pose>3.00 0.00 0 0 0 0</pose>
     </include>
     <include>
-      <name>distractor_2x6_red</name>
-      <uri>model://block_2x6_red</uri>
-      <pose>3.60 -0.45 0 0 0 0</pose>
+      <name>d_2x2_skyblue</name>
+      <uri>model://block_2x2_skyblue</uri>
+      <pose>3.00 0.25 0 0 0 0</pose>
     </include>
     <include>
-      <name>distractor_2x6_green</name>
-      <uri>model://block_2x6_green</uri>
-      <pose>3.60 -0.15 0 0 0 0</pose>
+      <name>d_2x2_black</name>
+      <uri>model://block_2x2_black</uri>
+      <pose>3.00 0.50 0 0 0 0</pose>
     </include>
     <include>
-      <name>distractor_2x6_yellow</name>
-      <uri>model://block_2x6_yellow</uri>
-      <pose>3.60 0.15 0 0 0 0</pose>
+      <name>d_2x6_white</name>
+      <uri>model://block_2x6_white</uri>
+      <pose>3.30 -0.75 0 0 0 0</pose>
     </include>
     <include>
-      <name>distractor_2x6_blue</name>
+      <name>d_2x6_blue</name>
       <uri>model://block_2x6_blue</uri>
-      <pose>3.60 0.45 0 0 0 0</pose>
+      <pose>3.30 -0.50 0 0 0 0</pose>
     </include>
-
+    <include>
+      <name>d_2x4_lime</name>
+      <uri>model://block_2x4_lime</uri>
+      <pose>3.30 -0.25 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x4_blue</name>
+      <uri>model://block_2x4_blue</uri>
+      <pose>3.30 0.00 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x4_orange</name>
+      <uri>model://block_2x4_orange</uri>
+      <pose>3.30 0.25 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_4x4_yellow</name>
+      <uri>model://block_4x4_yellow</uri>
+      <pose>3.30 0.50 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_step_2x4_lime</name>
+      <uri>model://block_step_2x4_lime</uri>
+      <pose>3.60 -0.75 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_step_2x3_paleyellow</name>
+      <uri>model://block_step_2x3_paleyellow</uri>
+      <pose>3.60 -0.50 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_nostud_2x4_red</name>
+      <uri>model://block_nostud_2x4_red</uri>
+      <pose>3.60 -0.25 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_nostud_2x4_green</name>
+      <uri>model://block_nostud_2x4_green</uri>
+      <pose>3.60 0.00 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_nostud_2x4_yellow</name>
+      <uri>model://block_nostud_2x4_yellow</uri>
+      <pose>3.60 0.25 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_nostud_2x4_white</name>
+      <uri>model://block_nostud_2x4_white</uri>
+      <pose>3.60 0.50 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_nostud_2x4_lightblue</name>
+      <uri>model://block_nostud_2x4_lightblue</uri>
+      <pose>3.90 -0.75 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x2_lightblue</name>
+      <uri>model://block_2x2_lightblue</uri>
+      <pose>3.90 -0.50 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x6_red</name>
+      <uri>model://block_2x6_red</uri>
+      <pose>3.90 -0.25 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x6_green</name>
+      <uri>model://block_2x6_green</uri>
+      <pose>3.90 0.00 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x6_yellow</name>
+      <uri>model://block_2x6_yellow</uri>
+      <pose>3.90 0.25 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x6_lightblue</name>
+      <uri>model://block_2x6_lightblue</uri>
+      <pose>3.90 0.50 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x4_paleyellow</name>
+      <uri>model://block_2x4_paleyellow</uri>
+      <pose>4.20 -0.75 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x4_skyblue</name>
+      <uri>model://block_2x4_skyblue</uri>
+      <pose>4.20 -0.50 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>d_2x4_cream</name>
+      <uri>model://block_2x4_cream</uri>
+      <pose>4.20 -0.25 0 0 0 0</pose>
+    </include>
   </world>
 </sdf>

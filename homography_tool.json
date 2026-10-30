@@ -1,0 +1,45 @@
+{
+ "H": [
+  [
+   -0.0011799157451679039,
+   -4.876050999938456e-05,
+   0.9224438894256625
+  ],
+  [
+   -6.078717989411329e-05,
+   0.0011326599471156865,
+   -0.3875697828219339
+  ],
+  [
+   -6.666905388958195e-05,
+   4.3135135949469706e-05,
+   1.0
+  ]
+ ],
+ "z_table_m": 0.05,
+ "cam_height_m": 0.75,
+ "nadir_xy": [
+  0.15455099214146412,
+  -0.01978875843345521
+ ],
+ "fit_rms_mm": 3.4,
+ "loo_rms_mm": 5.58,
+ "dots_used": [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10
+ ],
+ "note": "from planar_calibration_points.csv; robot xy = the frame you recorded, at the fixed calibration orientation",
+ "pick_offset_xy_m": [
+  0.1443,
+  -0.0184
+ ],
+ "pick_note": "link6 xy for a vertical gripper centred on a block = pixel_to_base(u, v, calib, h=0.019) + pick_offset_xy_m. Measured at yaw about -5 deg with 3 blocks (A, B, C), spread +-3.5 mm."
+}
